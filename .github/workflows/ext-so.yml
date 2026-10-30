@@ -1,0 +1,21 @@
+name: Build native EXT2 EXT3 EXT4 filesystem shared objects
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  ext-so:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libssl-dev libsqlite3-dev cmake
+      - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+      - run: cmake --build build --parallel 2
+      - run: ctest --test-dir build --output-on-failure
+      - run: |
+          for kind in EXT2 EXT3 EXT4; do
+            test -f "build/${kind}.so"
+            nm -D "build/${kind}.so" | grep -F 'infiltrator_filesystem_ext_v1'
+          done
