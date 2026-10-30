@@ -27,8 +27,9 @@ add_library(ext-core OBJECT
  "${EXT_SRC}/ext_plan.c"
  "${EXT_SRC}/ext_workspace.c"
  "${EXT_SRC}/ext_worker.c"
- "${EXT_SRC}/ext_metadata_worker.c")
-target_include_directories(ext-core PRIVATE "${EXT_SRC}" "${CMAKE_CURRENT_SOURCE_DIR}/compat"
+ "${EXT_SRC}/ext_metadata_worker.c"
+ fixtures/ext_codec.c module/ext_fixture_bridge.c)
+target_include_directories(ext-core PRIVATE "${EXT_SRC}" "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/include" "${CMAKE_CURRENT_SOURCE_DIR}/compat"
  "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_BINARY_DIR}")
 target_compile_definitions(ext-core PRIVATE _GNU_SOURCE _FILE_OFFSET_BITS=64)
 target_compile_options(ext-core PRIVATE -Wall -Wextra -Wpedantic -Werror)
@@ -44,7 +45,7 @@ foreach(kind IN ITEMS ext2 ext3 ext4)
  target_compile_options(ext-${kind}-driver PRIVATE -Wall -Wextra -Wpedantic -Werror)
  target_link_options(ext-${kind}-driver PRIVATE -Wl,-z,defs)
  target_include_directories(ext-${kind}-driver PRIVATE
-  "${EXT_SRC}" "${CMAKE_CURRENT_SOURCE_DIR}/compat"
+  "${EXT_SRC}" "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/include" "${CMAKE_CURRENT_SOURCE_DIR}/compat"
   "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_BINARY_DIR}")
  target_link_libraries(ext-${kind}-driver PRIVATE InfiltratrCommon::Common OpenSSL::Crypto SQLite::SQLite3 Threads::Threads)
  if(BUILD_TESTING)
