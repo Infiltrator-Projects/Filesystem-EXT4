@@ -57,3 +57,20 @@ foreach(kind IN ITEMS ext2 ext3 ext4)
  endif()
  install(TARGETS ext-${kind}-driver LIBRARY DESTINATION /System/Filesystems)
 endforeach()
+
+# The bitmap/descriptor cache regression came from Defragmenter, but the
+# private EXT disk implementation and its native unit tests live here.
+if(BUILD_TESTING)
+ add_library(ext-test-host STATIC tests/test_host_services.c)
+ target_include_directories(ext-test-host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_SOURCE_DIR}/compat")
+ target_compile_definitions(ext-test-host PRIVATE _GNU_SOURCE _FILE_OFFSET_BITS=64)
+ target_compile_options(ext-test-host PRIVATE -Wall -Wextra -Wpedantic -Werror)
+ target_link_libraries(ext-test-host PUBLIC ext-ext4-driver)
+ add_executable(ext-bitmap-cache-test tests/test_ext_bitmap_cache.c)
+ target_include_directories(ext-bitmap-cache-test PRIVATE
+   "${CMAKE_CURRENT_SOURCE_DIR}/migration/defragmenter/native" "${CMAKE_CURRENT_SOURCE_DIR}/compat" "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+ target_compile_definitions(ext-bitmap-cache-test PRIVATE _GNU_SOURCE _FILE_OFFSET_BITS=64)
+ target_compile_options(ext-bitmap-cache-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+ target_link_libraries(ext-bitmap-cache-test PRIVATE ext-test-host InfiltratrCommon::Common OpenSSL::Crypto SQLite::SQLite3 Threads::Threads)
+ add_test(NAME ext-bitmap-cache COMMAND ext-bitmap-cache-test)
+endif()
