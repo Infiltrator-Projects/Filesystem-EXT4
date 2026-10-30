@@ -7,10 +7,12 @@ typedef struct IfsExtFixtureHostV1 IfsExtFixtureHostV1;
 #define IFS_EXT_CAP_RUN UINT64_C(1)
 #define IFS_EXT_CAP_METADATA UINT64_C(2)
 #define IFS_EXT_CAP_FIXTURE UINT64_C(4)
+#define IFS_EXT_CAP_PROBE UINT64_C(8)
 typedef struct {
     uint32_t abi_version, structure_bytes;
     const char *format_id;
     uint64_t capabilities;
+    int (*probe)(const char *, const IfsDefragServicesV1 *);
     int (*run)(int, char **, const IfsDefragServicesV1 *);
     int (*metadata)(int, char **, const IfsDefragServicesV1 *);
     int (*fixture)(const void *, const char *, int, const IfsDefragServicesV1 *, const IfsExtFixtureHostV1 *);
