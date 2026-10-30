@@ -7,10 +7,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+static const char *program_name = "EXT.so";
+void ld_runtime_set_program_name(const char *name) {
+    if (name && *name) program_name = name;
+}
 void *ld_xmalloc(size_t size) {
     void *ptr = malloc(size == 0u ? 1u : size);
     if (ptr == NULL) {
-        fprintf(stderr, "EXT.so: malloc: %s\n", strerror(errno));
+        fprintf(stderr, "%s: malloc: %s\n", program_name, strerror(errno));
         exit(EXIT_FAILURE);
     }
     return ptr;
