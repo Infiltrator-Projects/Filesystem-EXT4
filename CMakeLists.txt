@@ -36,13 +36,9 @@ target_include_directories(ext-core PRIVATE "${EXT_SRC}" "${CMAKE_CURRENT_SOURCE
 target_compile_definitions(ext-core PRIVATE _GNU_SOURCE _FILE_OFFSET_BITS=64)
 target_compile_options(ext-core PRIVATE -Wall -Wextra -Wpedantic -Werror)
 target_link_libraries(ext-core PUBLIC InfiltratrCommon::Common OpenSSL::Crypto SQLite::SQLite3 Threads::Threads)
-option(IFS_EXT_BUILD_LEGACY_MULTIFORMAT_TEST_MODULES
-  "Build temporary EXT2/EXT3 test modules from the historical combined engine; never install them" OFF)
-set(IFS_EXT_DRIVER_KINDS ext4)
-if(IFS_EXT_BUILD_LEGACY_MULTIFORMAT_TEST_MODULES)
-  set(IFS_EXT_DRIVER_KINDS ext2 ext3 ext4)
-endif()
-foreach(kind IN LISTS IFS_EXT_DRIVER_KINDS)
+# EXT2 and EXT3 now have source-owned independent test builds.
+# Never build those variants out of the EXT4 repository.
+foreach(kind IN ITEMS ext4)
  string(TOUPPER "${kind}" module_name)
  add_library(ext-${kind}-driver SHARED
   $<TARGET_OBJECTS:ext-core>
@@ -63,8 +59,7 @@ foreach(kind IN LISTS IFS_EXT_DRIVER_KINDS)
   target_link_libraries(ext-${kind}-module-test PRIVATE ext-${kind}-driver)
   add_test(NAME ext-${kind}-module-contract COMMAND ext-${kind}-module-test)
  endif()
- # EXT2/EXT3 are built solely for cross-format regression.
- # The EXT4 package must not overwrite separately owned EXT2/EXT3 modules.
+ # EXT4 owns only this format's module and documentation.
  if(kind STREQUAL "ext4")
   install(TARGETS ext-${kind}-driver LIBRARY DESTINATION /System/Filesystems)
   install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/docs/EXT4.pdf"

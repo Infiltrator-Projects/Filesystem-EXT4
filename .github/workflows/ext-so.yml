@@ -1,4 +1,4 @@
-name: Build independent EXT4 module and qualify legacy compatibility
+name: Build and qualify EXT4-only module
 on:
   push:
     branches: [main]
@@ -22,24 +22,6 @@ jobs:
           test ! -e build/EXT2.so
           test ! -e build/EXT3.so
           nm -D build/EXT4.so | grep -F 'infiltrator_filesystem_ext_v1'
-      - name: Preserve legacy EXT2/EXT3 test binaries until their separate migrations pass
-        shell: bash
-        run: |
-          set -euo pipefail
-          cmake -S . -B build-legacy -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DIFS_EXT_BUILD_LEGACY_MULTIFORMAT_TEST_MODULES=ON
-          cmake --build build-legacy --parallel 2
-          ctest --test-dir build-legacy --output-on-failure
-          for kind in EXT2 EXT3 EXT4; do
-            test -f "build-legacy/${kind}.so"
-            nm -D "build-legacy/${kind}.so" | grep -F 'infiltrator_filesystem_ext_v1'
-          done
-          stage="$(mktemp -d)"
-          trap 'rm -rf "$stage"' EXIT
-          DESTDIR="$stage" cmake --install build-legacy
-          test "$(find "$stage" -type f | wc -l)" -eq 2
-          test -f "$stage/System/Filesystems/EXT4.so"
-          test ! -e "$stage/System/Filesystems/EXT2.so"
-          test ! -e "$stage/System/Filesystems/EXT3.so"
       - name: Verify EXT4-only runtime installation and one illustrated PDF
         shell: bash
         run: |
