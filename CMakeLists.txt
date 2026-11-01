@@ -36,7 +36,13 @@ target_include_directories(ext-core PRIVATE "${EXT_SRC}" "${CMAKE_CURRENT_SOURCE
 target_compile_definitions(ext-core PRIVATE _GNU_SOURCE _FILE_OFFSET_BITS=64)
 target_compile_options(ext-core PRIVATE -Wall -Wextra -Wpedantic -Werror)
 target_link_libraries(ext-core PUBLIC InfiltratrCommon::Common OpenSSL::Crypto SQLite::SQLite3 Threads::Threads)
-foreach(kind IN ITEMS ext2 ext3 ext4)
+option(IFS_EXT_BUILD_LEGACY_MULTIFORMAT_TEST_MODULES
+  "Build temporary EXT2/EXT3 test modules from the historical combined engine; never install them" OFF)
+set(IFS_EXT_DRIVER_KINDS ext4)
+if(IFS_EXT_BUILD_LEGACY_MULTIFORMAT_TEST_MODULES)
+  set(IFS_EXT_DRIVER_KINDS ext2 ext3 ext4)
+endif()
+foreach(kind IN LISTS IFS_EXT_DRIVER_KINDS)
  string(TOUPPER "${kind}" module_name)
  add_library(ext-${kind}-driver SHARED
   $<TARGET_OBJECTS:ext-core>
