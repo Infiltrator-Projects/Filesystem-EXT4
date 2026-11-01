@@ -57,10 +57,13 @@ foreach(kind IN ITEMS ext2 ext3 ext4)
   target_link_libraries(ext-${kind}-module-test PRIVATE ext-${kind}-driver)
   add_test(NAME ext-${kind}-module-contract COMMAND ext-${kind}-module-test)
  endif()
- install(TARGETS ext-${kind}-driver LIBRARY DESTINATION /System/Filesystems)
- # Every installed EXT-format SO gets one format-specific illustrated PDF.
- install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/docs/${module_name}.pdf"
-         DESTINATION /System/Resources/Documentation/Filesystem-EXT4)
+ # EXT2/EXT3 are built solely for cross-format regression.
+ # The EXT4 package must not overwrite separately owned EXT2/EXT3 modules.
+ if(kind STREQUAL "ext4")
+  install(TARGETS ext-${kind}-driver LIBRARY DESTINATION /System/Filesystems)
+  install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/docs/EXT4.pdf"
+          DESTINATION /System/Resources/Documentation/Filesystem-EXT4)
+ endif()
 endforeach()
 
 # The bitmap/descriptor cache regression came from Defragmenter, but the
