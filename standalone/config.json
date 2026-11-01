@@ -1,0 +1,7 @@
+{
+  "repository": "Filesystem-EXT4",
+  "module": "EXT4.so",
+  "pdf": "docs/EXT4.pdf",
+  "abi": "infiltrator_filesystem_ext_v1",
+  "build_system": "cmake"
+}
