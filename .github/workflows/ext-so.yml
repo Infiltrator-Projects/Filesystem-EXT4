@@ -19,3 +19,20 @@ jobs:
             test -f "build/${kind}.so"
             nm -D "build/${kind}.so" | grep -F 'infiltrator_filesystem_ext_v1'
           done
+      - name: Verify exactly one PDF per runtime SO
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage="$(mktemp -d)"
+          trap 'rm -rf "$stage"' EXIT
+          DESTDIR="$stage" cmake --install build
+          test "$(find "$stage" -type f | wc -l)" -eq 6
+          test -f "$stage/System/Filesystems/EXT2.so"
+          test -f "$stage/System/Resources/Documentation/Filesystem-EXT4/EXT2.pdf"
+          test "$(head -c 5 "$stage/System/Resources/Documentation/Filesystem-EXT4/EXT2.pdf")" = '%PDF-'
+          test -f "$stage/System/Filesystems/EXT3.so"
+          test -f "$stage/System/Resources/Documentation/Filesystem-EXT4/EXT3.pdf"
+          test "$(head -c 5 "$stage/System/Resources/Documentation/Filesystem-EXT4/EXT3.pdf")" = '%PDF-'
+          test -f "$stage/System/Filesystems/EXT4.so"
+          test -f "$stage/System/Resources/Documentation/Filesystem-EXT4/EXT4.pdf"
+          test "$(head -c 5 "$stage/System/Resources/Documentation/Filesystem-EXT4/EXT4.pdf")" = '%PDF-'
