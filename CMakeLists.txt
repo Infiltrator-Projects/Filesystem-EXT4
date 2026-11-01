@@ -14,6 +14,8 @@ FetchContent_Declare(infiltratr_common
  GIT_REPOSITORY https://github.com/Infiltrator-Projects/Libraries.git
  GIT_TAG c76ec95ef66fc728df6a906ad75a6a4dd63b419b)
 FetchContent_MakeAvailable(infiltratr_common)
+# The embedded Common SDK is linked, not installed with filesystem runtime modules.
+set_property(DIRECTORY "${infiltratr_common_SOURCE_DIR}" PROPERTY EXCLUDE_FROM_ALL TRUE)
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/version.h" "#define LD_VERSION \"1.0.0\"\n")
 set(EXT_SRC "${CMAKE_CURRENT_SOURCE_DIR}/migration/defragmenter/native")
 set_source_files_properties("${EXT_SRC}/ext_worker.c" PROPERTIES
@@ -56,6 +58,9 @@ foreach(kind IN ITEMS ext2 ext3 ext4)
   add_test(NAME ext-${kind}-module-contract COMMAND ext-${kind}-module-test)
  endif()
  install(TARGETS ext-${kind}-driver LIBRARY DESTINATION /System/Filesystems)
+ # Every installed EXT-format SO gets one format-specific illustrated PDF.
+ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/docs/${module_name}.pdf"
+         DESTINATION /System/Resources/Documentation/Filesystem-EXT4)
 endforeach()
 
 # The bitmap/descriptor cache regression came from Defragmenter, but the
