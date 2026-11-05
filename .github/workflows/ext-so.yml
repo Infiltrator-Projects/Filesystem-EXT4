@@ -31,7 +31,7 @@ jobs:
           DESTDIR="$stage" cmake --install build
           test "$(find "$stage" ! -type d | wc -l)" -eq 2
           test -f "$stage/System/Filesystems/EXT4.so"
-          test -f "$stage/System/Resources/Documentation/Filesystem-EXT4/EXT4.pdf"
-          test "$(head -c 5 "$stage/System/Resources/Documentation/Filesystem-EXT4/EXT4.pdf")" = '%PDF-'
+          test -f "$stage/System/Resources/Documentation/Filesystem-EXT4.pdf"
+          test "$(head -c 5 "$stage/System/Resources/Documentation/Filesystem-EXT4.pdf")" = '%PDF-'
           test ! -e "$stage/System/Filesystems/EXT2.so"
           test ! -e "$stage/System/Filesystems/EXT3.so"
