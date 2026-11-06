@@ -1,7 +1,7 @@
-# EXT4 migration — 2026-10-30
+# EXT4 local source consolidation — 6 November 2026
 
-**Source import, not yet a working independent EXT4.so.**
+Every one of the 40 tracked files in the central Filesystems EXT4 native source tree at `a253fb724ce1fd760a361219281effb6abd71367` is present locally in this independent repository. Its 3 existing canonical core/design files were byte-identical, so preserved; the complete Linux VFS and embedded journal source was imported verbatim with author/license notices unchanged.
 
-EXT4 canonical core and design copied unchanged from Filesystems commit ca2fa1210c3c1f2b6f52cd15b3da6dfa83d453ad. Shared EXT2/3/4 Defragmenter analysis/relocation sources copied unchanged to `migration/defragmenter/native/` from Defragmenter commit 30af892d8897d3aeaeefeac1bfcdb9620a0a5c72. This is one shared migration reference, not an EXT4-only implementation and NOT to be independently forked into EXT2 and EXT3.
+The independent EXT4 shared-object implementation and its qualification tests remain in this Git. The `standalone/kernel.json` builds `ext4.ko` from this repository's local `native/filesystems/ext4/` tree, not a pinned download of central Filesystems. Only shared Libraries/Common code remains an external source dependency for the native `.so` build.
 
-Full Linux kernel implementation still lives in Filesystems and existing Defragmenter builds still own runtime dispatch. Do not remove either until an integrated standalone module passes independent read/write/defrag tests and Common ABI adoption. No new compiled driver or release is asserted.
+Kernel build/runtime, journal recovery, media and root/EFI qualification remain separate acceptance gates. Do not delete the central EXT4 implementation until the legacy Filesystems CMake, CI and packaging consumers have switched and pass independent post-change checks.
