@@ -163,3 +163,61 @@ BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 454.0 Tm (https://docs.kernel.org/f
 BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 425.0 Tm (The InfiltratorOS shared-object module, optional kernel adapter, native builder and) Tj ET
 BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 408.0 Tm (release-specific tests are a separate implementation. A successful document build or) Tj ET
 BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 391.0 Tm (package installation does not qualify physical writes, recovery, kernel mounting or boot.) Tj ET
+%%Page
+0.05 0.13 0.22 rg 0 749 595 93 re f
+0.04 0.52 0.60 rg 50 747 114 5 re f
+0.76 0.82 0.86 RG 0.7 w 50 50 m 545 50 l S
+BT /F2 9 Tf 0.65 0.89 0.92 rg 1 0 0 1 50 802.0 Tm (INFILTRATOR / PRIMARY FORMAT DESIGN APPENDIX) Tj ET
+BT /F2 17 Tf 1 1 1 rg 1 0 0 1 50 773.0 Tm (EXT4 / technical detail) Tj ET
+BT /F1 8 Tf 0.31 0.40 0.44 rg 1 0 0 1 50 34.0 Tm (EXT4 / original filesystem research) Tj ET
+BT /F1 8 Tf 0.31 0.40 0.44 rg 1 0 0 1 510 34.0 Tm (PAGE 09) Tj ET
+BT /F2 14 Tf 0.03 0.44 0.51 rg 1 0 0 1 50 704.0 Tm (ON-DISK FIELD AND STRUCTURE INVENTORY) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 666.0 Tm (Format-specific field names and meanings are summarised below; where applicable the) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 648.0 Tm (original specification defines exact endianness, offsets, checksums and format-revision) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 630.0 Tm (limits.) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 600.0 Tm (1. Primary superblock: 1024-byte offset and feature flags.) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 570.0 Tm (2. Block-group descriptor: inode table, bitmaps and checksums.) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 540.0 Tm (3. Extent header: depth, entry count and maximum entries.) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 510.0 Tm (4. Extent leaf: logical start, physical start and length.) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 480.0 Tm (5. Extent index: key and child-node physical reference.) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 450.0 Tm (6. JBD2: big-endian journal records within little-endian ext metadata.) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 420.0 Tm (7. HTree: hashed indexed directories when enabled.) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 390.0 Tm (8. Unwritten extents: allocated ranges with special read semantics.) Tj ET
+%%Page
+0.05 0.13 0.22 rg 0 749 595 93 re f
+0.04 0.52 0.60 rg 50 747 114 5 re f
+0.76 0.82 0.86 RG 0.7 w 50 50 m 545 50 l S
+BT /F2 9 Tf 0.65 0.89 0.92 rg 1 0 0 1 50 802.0 Tm (INFILTRATOR / PRIMARY FORMAT DESIGN APPENDIX) Tj ET
+BT /F2 17 Tf 1 1 1 rg 1 0 0 1 50 773.0 Tm (EXT4 / technical detail) Tj ET
+BT /F1 8 Tf 0.31 0.40 0.44 rg 1 0 0 1 50 34.0 Tm (EXT4 / original filesystem research) Tj ET
+BT /F1 8 Tf 0.31 0.40 0.44 rg 1 0 0 1 510 34.0 Tm (PAGE 10) Tj ET
+BT /F2 14 Tf 0.03 0.44 0.51 rg 1 0 0 1 50 704.0 Tm (HISTORICAL FORMAT DEVELOPMENT) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 666.0 Tm (Selected design milestones explain why this format acquired its present layout. Dates) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 648.0 Tm (refer to historical format or implementation changes, not InfiltratorOS releases.) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 618.0 Tm (1. 2006: ext4dev begins expanding ext3 architecture.) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 588.0 Tm (2. 2008: ext4 reaches stable Linux 2.6.28 inclusion.) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 558.0 Tm (3. 2010s: 64-bit, flex groups and checksumming mature.) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 528.0 Tm (4. Later: additional encryption, inline data and allocation features extend formats.) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 498.0 Tm (Important historical distinction: newly introduced driver features are not necessarily) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 480.0 Tm (changes to the original on-disk format. Read the version or feature bits rather than) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 462.0 Tm (assuming current software support defines historic media.) Tj ET
+%%Page
+0.05 0.13 0.22 rg 0 749 595 93 re f
+0.04 0.52 0.60 rg 50 747 114 5 re f
+0.76 0.82 0.86 RG 0.7 w 50 50 m 545 50 l S
+BT /F2 9 Tf 0.65 0.89 0.92 rg 1 0 0 1 50 802.0 Tm (INFILTRATOR / PRIMARY FORMAT DESIGN APPENDIX) Tj ET
+BT /F2 17 Tf 1 1 1 rg 1 0 0 1 50 773.0 Tm (EXT4 / technical detail) Tj ET
+BT /F1 8 Tf 0.31 0.40 0.44 rg 1 0 0 1 50 34.0 Tm (EXT4 / original filesystem research) Tj ET
+BT /F1 8 Tf 0.31 0.40 0.44 rg 1 0 0 1 510 34.0 Tm (PAGE 11) Tj ET
+BT /F2 14 Tf 0.03 0.44 0.51 rg 1 0 0 1 50 704.0 Tm (FORMAT VALIDATION AND RECOVERY INVARIANTS) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 666.0 Tm (A writable implementation must establish all of these conditions before modifying any) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 648.0 Tm (original-format media. These checks describe the minimum class of invariants, not proof) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 630.0 Tm (of complete recovery qualification.) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 600.0 Tm (1. Check incompatible flags, 64-bit group descriptors and checksums.) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 570.0 Tm (2. Distinguish allocated unwritten extents from initialised file data.) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 540.0 Tm (3. Validate extent tree ordering, depth and logical coverage.) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 510.0 Tm (4. Respect JBD2 transaction ordering and byte order.) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 480.0 Tm (5. Check bitmap, inode and directory state as a coherent group.) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 450.0 Tm (Forensic principle: use a separate verified image, retain original structures, and) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 432.0 Tm (report conflicting evidence instead of inventing a new supposedly clean filesystem) Tj ET
+BT /F1 10 Tf 0.08 0.16 0.24 rg 1 0 0 1 57 414.0 Tm (state.) Tj ET
