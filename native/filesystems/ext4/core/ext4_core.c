@@ -164,8 +164,14 @@ ifs_ext4_u32 ifs_ext4_directory_record_min_length(
     const ifs_ext4_u32 name_length,
     const int has_hash)
 {
-    ifs_ext4_u32 length = name_length + 11U;
+    ifs_ext4_u32 length;
 
+    /* EXT4 on-disk dirent name_len is eight bits.  A sentinel preserves
+     * rejection for callers without allowing u32 length arithmetic to wrap. */
+    if (name_length > 255U)
+        return 0xffffffffU;
+
+    length = name_length + 11U;
     if (has_hash != 0)
         length += 8U;
     return length & ~3U;
@@ -235,6 +241,8 @@ IfsExt4DirectoryRecordStatus ifs_ext4_validate_directory_record(
         ifs_ext4_directory_record_min_length(1U, trailing_entry_has_hash);
     ifs_ext4_u64 next_offset;
 
+    if (name_length > 255U)
+        return IFS_EXT4_DIRECTORY_RECORD_NAME_TOO_LONG;
     if (record_length < minimum)
         return IFS_EXT4_DIRECTORY_RECORD_TOO_SHORT;
     if ((record_length & 3U) != 0U)
