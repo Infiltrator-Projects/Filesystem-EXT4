@@ -30,6 +30,7 @@ add_library(ext-core OBJECT
  "${EXT_SRC}/ext_workspace.c"
  "${EXT_SRC}/ext_worker.c"
  "${EXT_SRC}/ext_metadata_worker.c"
+ "${CMAKE_CURRENT_SOURCE_DIR}/native/filesystems/ext4/core/ext4_core.c"
  fixtures/ext_codec.c module/ext_fixture_bridge.c)
 target_include_directories(ext-core PRIVATE "${EXT_SRC}" "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/include" "${CMAKE_CURRENT_SOURCE_DIR}/compat"
  "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_BINARY_DIR}")
@@ -82,4 +83,12 @@ if(BUILD_TESTING)
  target_compile_options(ext-bitmap-cache-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
  target_link_libraries(ext-bitmap-cache-test PRIVATE ext-test-host InfiltratrCommon::Common OpenSSL::Crypto SQLite::SQLite3 Threads::Threads)
  add_test(NAME ext-bitmap-cache COMMAND ext-bitmap-cache-test)
+ # The kernel adapter builds this same portable core from core_bridge.c;
+ # demand its symbols and validation semantics in EXT4.so as well.
+ add_executable(ext-core-policy-test tests/test_canonical_core.c)
+ target_include_directories(ext-core-policy-test PRIVATE
+   "${CMAKE_CURRENT_SOURCE_DIR}/native/filesystems/ext4/core")
+ target_compile_options(ext-core-policy-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+ target_link_libraries(ext-core-policy-test PRIVATE ext-ext4-driver)
+ add_test(NAME ext-canonical-core-policy COMMAND ext-core-policy-test)
 endif()
