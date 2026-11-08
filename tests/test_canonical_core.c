@@ -36,6 +36,21 @@ int main(void)
                         0U, IFS_EXT4_FEATURE_RO_COMPAT_BIGALLOC, 0U) ==
                     IFS_EXT4_BIGALLOC_REQUIRES_EXTENTS,
                     "reject bigalloc without extents");
+    errors += check(ifs_ext4_directory_record_min_length(
+                        UINT32_MAX, 0) == UINT32_MAX,
+                    "oversized dirent name saturates safely");
+    errors += check(ifs_ext4_validate_directory_record(
+                        0U, 12U, UINT32_MAX, 2U, 4096U, 100U,
+                        0, 0, 0) == IFS_EXT4_DIRECTORY_RECORD_NAME_TOO_LONG,
+                    "reject overflowed dirent name");
+    errors += check(ifs_ext4_validate_directory_record(
+                        0U, 12U, 256U, 2U, 4096U, 100U,
+                        0, 0, 0) == IFS_EXT4_DIRECTORY_RECORD_NAME_TOO_LONG,
+                    "reject 256-byte dirent name");
+    errors += check(ifs_ext4_validate_directory_record(
+                        0U, 12U, 1U, 2U, 4096U, 100U,
+                        0, 0, 0) == IFS_EXT4_DIRECTORY_RECORD_OK,
+                    "accept valid dirent name");
 
     return errors ? 1 : 0;
 }
