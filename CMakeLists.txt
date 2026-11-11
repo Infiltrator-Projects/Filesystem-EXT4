@@ -12,7 +12,7 @@ set(INFILTRATR_COMMON_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(INFILTRATR_COMMON_BUILD_SHARED OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(infiltratr_common
  GIT_REPOSITORY https://github.com/Infiltrator-Projects/Libraries.git
- GIT_TAG c76ec95ef66fc728df6a906ad75a6a4dd63b419b)
+ GIT_TAG 5b5fb95988c8d0b53ed29fdecfb0b70274182fd6)
 FetchContent_MakeAvailable(infiltratr_common)
 # The embedded Common SDK is linked, not installed with filesystem runtime modules.
 set_property(DIRECTORY "${infiltratr_common_SOURCE_DIR}" PROPERTY EXCLUDE_FROM_ALL TRUE)
@@ -43,7 +43,8 @@ foreach(kind IN ITEMS ext4)
  string(TOUPPER "${kind}" module_name)
  add_library(ext-${kind}-driver SHARED
   $<TARGET_OBJECTS:ext-core>
-  compat/legacy_services.c compat/runtime_alloc.c module/ext_module.c)
+  compat/legacy_services.c compat/runtime_alloc.c module/ext_module.c
+  module/ext_v2_probe.c)
  set_target_properties(ext-${kind}-driver PROPERTIES PREFIX "" OUTPUT_NAME "${module_name}" SUFFIX ".so")
  target_compile_definitions(ext-${kind}-driver PRIVATE
   _GNU_SOURCE _FILE_OFFSET_BITS=64 IFS_EXT_FORMAT_ID="${kind}")
@@ -51,7 +52,8 @@ foreach(kind IN ITEMS ext4)
  target_link_options(ext-${kind}-driver PRIVATE -Wl,-z,defs)
  target_include_directories(ext-${kind}-driver PRIVATE
   "${EXT_SRC}" "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/include" "${CMAKE_CURRENT_SOURCE_DIR}/compat"
-  "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_BINARY_DIR}")
+  "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_BINARY_DIR}"
+  "${infiltratr_common_SOURCE_DIR}/include")
  target_link_libraries(ext-${kind}-driver PRIVATE InfiltratrCommon::Common OpenSSL::Crypto SQLite::SQLite3 Threads::Threads)
  if(BUILD_TESTING)
   add_executable(ext-${kind}-module-test tests/test_module.c)
@@ -59,6 +61,11 @@ foreach(kind IN ITEMS ext4)
   target_include_directories(ext-${kind}-module-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_SOURCE_DIR}/compat")
   target_link_libraries(ext-${kind}-module-test PRIVATE ext-${kind}-driver)
   add_test(NAME ext-${kind}-module-contract COMMAND ext-${kind}-module-test)
+  add_executable(ext4-v2-probe-test tests/test_ext_v2_probe.c)
+  target_include_directories(ext4-v2-probe-test PRIVATE "${infiltratr_common_SOURCE_DIR}/include")
+  target_link_libraries(ext4-v2-probe-test PRIVATE ext-${kind}-driver InfiltratrCommon::Common)
+  target_compile_options(ext4-v2-probe-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+  add_test(NAME ext4-common-v2-probe COMMAND ext4-v2-probe-test)
  endif()
  # EXT4 owns only this format's module and documentation.
  if(kind STREQUAL "ext4")
