@@ -2,10 +2,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Boot a real Linux EFI stub via the V2-only EXT4 reader in disposable OVMF.
 set -euo pipefail
+export LC_ALL=C
 boot=$(realpath "${1:?BOOTX64.EFI required}")
 module=$(realpath "${2:?firmware EXT4.so required}")
 kernel=$(realpath "${3:?Linux EFI stub image required}")
 work=$(realpath -m "${4:?output directory required}")
+mode=${5:-clean}
+case "$mode" in clean|needs-recovery) ;; *) exit 2 ;; esac
 ovmf=${OVMF_DIR:-/usr/share/OVMF}
 mkdir -p "$work"
 esp="$work/esp.img"
@@ -35,7 +38,15 @@ chmod +x "$ram/init"
 ln -sf /System/Kernel/Images/native.img "$tree/vmlinuz"
 ln -sf native.initrd "$images/current.initrd"
 truncate -s 128M "$media"
-mkfs.ext4 -q -F -b 4096 -L EXT4ROOT -d "$tree" "$media"
+# Match the deployed 4 KiB GPT/NVMe EXT4 root, independently of the
+# e2fsprogs defaults on each qualification runner.
+features=has_journal,ext_attr,resize_inode,dir_index,filetype,extent,64bit,flex_bg
+features+=,sparse_super,large_file,huge_file,dir_nlink,extra_isize,metadata_csum
+mkfs.ext4 -q -F -b 4096 -O "none,$features" -L EXT4ROOT -d "$tree" "$media"
+if [[ $mode == needs-recovery ]]; then
+    debugfs -w -R 'feature needs_recovery' "$media"
+    tune2fs -l "$media" | grep -E '^Filesystem features:.*\bneeds_recovery\b'
+fi
 truncate -s 64M "$esp"
 mkfs.fat -F32 "$esp"
 mmd -i "$esp" ::/EFI ::/EFI/BOOT ::/EFI/BOOT/filesystems_x64
@@ -74,6 +85,19 @@ qemu=(qemu-system-x86_64 -machine q35,accel=tcg -cpu max -m 768 -display none
       -device nvme,drive=bootdisk,serial=ext4-qualification)
 if [[ -n ${QEMU_DATA_DIR:-} ]]; then
     qemu+=(-L "$QEMU_DATA_DIR")
+fi
+if [[ $mode == needs-recovery ]]; then
+    result=0
+    timeout 30 "${qemu[@]}" || result=$?
+    [[ $result == 0 || $result == 124 ]]
+    grep -Fq 'validated EXT4.so' "$work/serial.log"
+    if grep -Eq 'mounted module on|starting Linux EFI image|EXT4_COMMON_V2_LINUX_HANDOFF_PASS' "$work/serial.log"; then
+        echo 'BOOT accepted EXT4 with pending journal recovery' >&2
+        exit 1
+    fi
+    dd if="$disk" bs=1M skip=65 count=128 status=none | cmp - "$media"
+    echo EXT4_COMMON_V2_JOURNAL_RECOVERY_REFUSED
+    exit 0
 fi
 if ! timeout 120 "${qemu[@]}" ||
    ! grep -Fq 'EXT4_COMMON_V2_LINUX_HANDOFF_PASS' "$work/serial.log"; then

@@ -70,6 +70,8 @@ jobs:
             "$work/portable/System/Filesystems/EXT4.so" "$kernel" "$work/portable-vm"
           bash tests/firmware-ext4.sh "$boot/refind/refind_x64.efi" \
             "$RUNNER_TEMP/installed/System/Filesystems/EXT4.so" "$kernel" "$work/native-vm"
+          bash tests/firmware-ext4.sh "$boot/refind/refind_x64.efi" \
+            "$RUNNER_TEMP/installed/System/Filesystems/EXT4.so" "$kernel" "$work/recovery-vm" needs-recovery
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
