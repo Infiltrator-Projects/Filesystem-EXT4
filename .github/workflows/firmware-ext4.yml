@@ -25,7 +25,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential cmake cpio busybox-static e2fsprogs dosfstools mtools qemu-system-x86 ovmf
+            build-essential cmake cpio busybox-static e2fsprogs dosfstools gdisk mtools qemu-system-x86 ovmf
           work="$RUNNER_TEMP/ext4-firmware"
           mkdir -p "$work"
           boot=infiltrator-boot_0.1.46_amd64.deb

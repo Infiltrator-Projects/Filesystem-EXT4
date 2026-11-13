@@ -10,6 +10,7 @@ ovmf=${OVMF_DIR:-/usr/share/OVMF}
 mkdir -p "$work"
 esp="$work/esp.img"
 media="$work/ext4.img"
+disk="$work/gpt.img"
 tree="$work/root"
 ram="$work/ram"
 mkdir -p "$tree/System/Kernel/Images" "$ram"/{bin,dev,proc}
@@ -35,20 +36,24 @@ ln -sf /System/Kernel/Images/native.img "$tree/vmlinuz"
 ln -sf native.initrd "$images/current.initrd"
 truncate -s 128M "$media"
 mkfs.ext4 -q -F -b 4096 -L EXT4ROOT -d "$tree" "$media"
-before=$(sha256sum "$media")
 truncate -s 64M "$esp"
 mkfs.fat -F32 "$esp"
 mmd -i "$esp" ::/EFI ::/EFI/BOOT ::/EFI/BOOT/filesystems_x64
 mcopy -i "$esp" "$boot" ::/EFI/BOOT/BOOTX64.EFI
 mcopy -i "$esp" "$module" ::/EFI/BOOT/filesystems_x64/EXT4.so
-cat > "$work/boot.conf" <<'BOOT'
+truncate -s 200M "$disk"
+sgdisk --clear --new=1:2048:+64M --typecode=1:ef00 \
+    --new=2:133120:+128M --typecode=2:8300 "$disk"
+partuuid=$(LC_ALL=C sgdisk --info=2 "$disk" | awk '/Partition unique GUID: / { print $4 }')
+[[ $partuuid =~ ^[[:xdigit:]]{8}(-[[:xdigit:]]{4}){3}-[[:xdigit:]]{12}$ ]]
+cat > "$work/boot.conf" <<BOOT
 timeout 1
 textonly true
 use_nvram false
 driver_diagnostics true
 scanfor manual
 menuentry "InfiltratorOS kernel from EXT4.so" {
-    volume EXT4ROOT
+    volume $partuuid
     filesystem_module ext4
     loader \vmlinuz
     initrd \System\Kernel\Images\current.initrd
@@ -58,13 +63,15 @@ menuentry "InfiltratorOS kernel from EXT4.so" {
 }
 BOOT
 mcopy -i "$esp" "$work/boot.conf" ::/EFI/BOOT/
+dd if="$esp" of="$disk" bs=1M seek=1 conv=notrunc status=none
+dd if="$media" of="$disk" bs=1M seek=65 conv=notrunc status=none
 cp "$ovmf/OVMF_VARS_4M.fd" "$work/vars.fd"
 qemu=(qemu-system-x86_64 -machine q35,accel=tcg -cpu max -m 768 -display none
       -monitor none -net none -no-reboot -serial "file:$work/serial.log"
       -drive "if=pflash,format=raw,readonly=on,file=$ovmf/OVMF_CODE_4M.fd"
       -drive "if=pflash,format=raw,file=$work/vars.fd"
-      -drive "file=$esp,format=raw,if=virtio"
-      -drive "file=$media,format=raw,if=virtio,readonly=on")
+      -drive "file=$disk,format=raw,if=none,id=bootdisk"
+      -device nvme,drive=bootdisk,serial=ext4-qualification)
 if [[ -n ${QEMU_DATA_DIR:-} ]]; then
     qemu+=(-L "$QEMU_DATA_DIR")
 fi
@@ -74,7 +81,7 @@ if ! timeout 120 "${qemu[@]}" ||
     exit 1
 fi
 grep -Fq 'validated EXT4.so' "$work/serial.log"
-grep -Fq 'close /vmlinuz:' "$work/serial.log"
-grep -Fq 'close /System/Kernel/Images/current.initrd:' "$work/serial.log"
-test "$(sha256sum "$media")" = "$before"
+grep -Fq "close /vmlinuz: $(stat -c %s "$kernel") bytes read through module" "$work/serial.log"
+grep -Fq "close /System/Kernel/Images/current.initrd: $(stat -c %s "$images/native.initrd") bytes read through module" "$work/serial.log"
+dd if="$disk" bs=1M skip=65 count=128 status=none | cmp - "$media"
 echo EXT4_COMMON_V2_LINUX_HANDOFF_PASS
