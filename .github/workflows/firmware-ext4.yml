@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+name: Qualify EXT4 Common V2 firmware reads
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ext4-boot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: Infiltrator-Projects/Libraries
+          ref: 4c92c8dcd7e03afd4bab3105e143dbabd72c8adc
+          path: common
+      - name: Build a V2-only firmware module and boot it in OVMF
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake cpio busybox-static e2fsprogs dosfstools mtools qemu-system-x86 ovmf
+          work="$RUNNER_TEMP/ext4-firmware"
+          mkdir -p "$work"
+          boot=infiltrator-boot_0.1.46_amd64.deb
+          curl -fsSL --retry 3 "https://github.com/Infiltrator-Projects/Boot/releases/download/v0.1.46/$boot" -o "$work/$boot"
+          printf '%s  %s\n' 9ab605a5312a54741d4a002e1131823ef7e28a73957f6473bea88a9c64d10035 "$work/$boot" | sha256sum -c -
+          dpkg-deb -x "$work/$boot" "$work/package"
+          # Use a real EFI-stub kernel from the runner distribution.
+          image=$(apt-cache depends linux-image-generic | awk '/Depends: linux-image-[0-9]/ { image=$2 } END { print image }')
+          test -n "$image"
+          (cd "$work" && apt-get download "linux-image-unsigned-${image#linux-image-}")
+          dpkg-deb -x "$work"/linux-image-unsigned-*.deb "$work/kernel"
+          kernel="$work/kernel/boot/vmlinuz-${image#linux-image-}"
+          test -s "$kernel"
+          cmake -S module/firmware -B "$work/build" \
+            -DCMAKE_BUILD_TYPE=Release -DCOMMON_INCLUDE_DIR="$PWD/common/include"
+          cmake --build "$work/build" --parallel
+          validator="$work/package/usr/lib/infiltrator-boot/validate-module"
+          "$validator" "$work/build/EXT4.so"
+          bash tests/firmware-ext4.sh \
+            "$work/package/usr/lib/infiltrator-boot/EFI/BOOT/BOOTX64.EFI" \
+            "$work/build/EXT4.so" "$kernel" "$work/vm"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ext4-firmware-serial
+          path: ${{ runner.temp }}/ext4-firmware/vm/serial.log
+          if-no-files-found: warn
