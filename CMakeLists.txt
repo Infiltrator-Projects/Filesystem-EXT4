@@ -16,6 +16,21 @@ FetchContent_Declare(infiltratr_common
 FetchContent_MakeAvailable(infiltratr_common)
 # The embedded Common SDK is linked, not installed with filesystem runtime modules.
 set_property(DIRECTORY "${infiltratr_common_SOURCE_DIR}" PROPERTY EXCLUDE_FROM_ALL TRUE)
+# Keep native PGO, LTO and CPU flags out of the firmware ELF. The installed
+# shared object carries these portable bytes as a non-allocated ELF section.
+set(EXT4_FIRMWARE_DIR "${CMAKE_CURRENT_BINARY_DIR}/firmware")
+set(EXT4_FIRMWARE_ELF "${EXT4_FIRMWARE_DIR}/EXT4.so")
+add_custom_command(OUTPUT "${EXT4_FIRMWARE_ELF}"
+ COMMAND "${CMAKE_COMMAND}" -S "${CMAKE_CURRENT_SOURCE_DIR}/module/firmware"
+  -B "${EXT4_FIRMWARE_DIR}" -DCMAKE_BUILD_TYPE=Release
+  "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}"
+  "-DCOMMON_INCLUDE_DIR=${infiltratr_common_SOURCE_DIR}/include"
+ COMMAND "${CMAKE_COMMAND}" --build "${EXT4_FIRMWARE_DIR}"
+ DEPENDS module/firmware/CMakeLists.txt module/firmware/ext4.c
+  native/filesystems/ext4/core/ext4_core.c native/filesystems/ext4/core/ext4_core.h
+  "${infiltratr_common_SOURCE_DIR}/include/infiltratr/filesystem_module_v2.h"
+ VERBATIM)
+add_custom_target(ext4-firmware-elf DEPENDS "${EXT4_FIRMWARE_ELF}")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/version.h" "#define LD_VERSION \"1.0.0\"\n")
 set(EXT_SRC "${CMAKE_CURRENT_SOURCE_DIR}/migration/defragmenter/native")
 set_source_files_properties("${EXT_SRC}/ext_worker.c" PROPERTIES
@@ -55,6 +70,12 @@ foreach(kind IN ITEMS ext4)
   "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_BINARY_DIR}"
   "${infiltratr_common_SOURCE_DIR}/include")
  target_link_libraries(ext-${kind}-driver PRIVATE InfiltratrCommon::Common OpenSSL::Crypto SQLite::SQLite3 Threads::Threads)
+ add_dependencies(ext-${kind}-driver ext4-firmware-elf)
+ set_property(TARGET ext-${kind}-driver APPEND PROPERTY LINK_DEPENDS "${EXT4_FIRMWARE_ELF}")
+ add_custom_command(TARGET ext-${kind}-driver POST_BUILD
+  COMMAND "${CMAKE_OBJCOPY}" --add-section ".infiltrator_boot=${EXT4_FIRMWARE_ELF}"
+   --set-section-flags .infiltrator_boot=readonly "$<TARGET_FILE:ext-${kind}-driver>"
+  VERBATIM)
  if(BUILD_TESTING)
   add_executable(ext-${kind}-module-test tests/test_module.c)
   target_compile_definitions(ext-${kind}-module-test PRIVATE IFS_EXT_FORMAT_ID="${kind}")

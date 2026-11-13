@@ -13,12 +13,12 @@ InfiltratorOS calls `--system-package-mode` and decides which outputs need updat
 
 ## BOOT qualification
 
-`module/firmware` builds a freestanding Common V2 `EXT4.so` for the
-firmware test. The test loads a kernel and initramfs through that module on
-a GPT-partitioned NVMe image and checks that the EXT4 partition is unchanged.
+`EXT4.so` carries a freestanding Common V2 ELF built from `module/firmware`.
+BOOT 0.1.47 or later can read it from the same installed file used by
+desktop applications. Qualification loads a kernel and initramfs through
+that module on a GPT-partitioned NVMe image and checks the EXT4 partition.
 The reader handles extent-backed files, sparse ranges, symbolic links and
 metadata checksums on clean EXT4 volumes with 1, 2 or 4 KiB blocks. It
 rejects volumes that require journal replay and layouts outside its supported
-feature set. The firmware test build is independent of the existing hosted
-installer package. Automatic ESP deployment remains gated on qualifying
-the packaged module and preserving the existing recovery entry.
+feature set. Automatic ESP deployment requires a qualified boot entry and
+preservation of the existing recovery entry.
