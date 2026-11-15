@@ -58,7 +58,7 @@ foreach(kind IN ITEMS ext4)
  string(TOUPPER "${kind}" module_name)
  add_library(ext-${kind}-driver SHARED
   $<TARGET_OBJECTS:ext-core>
-  compat/legacy_services.c compat/runtime_alloc.c module/ext_module.c
+  compat/legacy_services.c compat/runtime_alloc.c
   module/ext_v2_probe.c)
  set_target_properties(ext-${kind}-driver PROPERTIES PREFIX "" OUTPUT_NAME "${module_name}" SUFFIX ".so")
  target_compile_definitions(ext-${kind}-driver PRIVATE
@@ -79,14 +79,16 @@ foreach(kind IN ITEMS ext4)
  if(BUILD_TESTING)
   add_executable(ext-${kind}-module-test tests/test_module.c)
   target_compile_definitions(ext-${kind}-module-test PRIVATE IFS_EXT_FORMAT_ID="${kind}")
-  target_include_directories(ext-${kind}-module-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_SOURCE_DIR}/compat")
-  target_link_libraries(ext-${kind}-module-test PRIVATE ext-${kind}-driver)
+  target_include_directories(ext-${kind}-module-test PRIVATE "${infiltratr_common_SOURCE_DIR}/include")
+  target_link_libraries(ext-${kind}-module-test PRIVATE ext-${kind}-driver InfiltratrCommon::Common)
   add_test(NAME ext-${kind}-module-contract COMMAND ext-${kind}-module-test)
   add_executable(ext4-v2-probe-test tests/test_ext_v2_probe.c)
   target_include_directories(ext4-v2-probe-test PRIVATE "${infiltratr_common_SOURCE_DIR}/include")
   target_link_libraries(ext4-v2-probe-test PRIVATE ext-${kind}-driver InfiltratrCommon::Common)
   target_compile_options(ext4-v2-probe-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
   add_test(NAME ext4-common-v2-probe COMMAND ext4-v2-probe-test)
+  add_test(NAME ext4-v2-only-dynamic-export
+    COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_v2_exports.sh" "$<TARGET_FILE:ext-${kind}-driver>")
  endif()
  # EXT4 owns only this format's module and documentation.
  if(kind STREQUAL "ext4")

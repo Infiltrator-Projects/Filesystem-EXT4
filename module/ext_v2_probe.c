@@ -1,9 +1,14 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * Bounded Common V2 EXT4 identification, validated by the canonical EXT4
- * format core. Existing V1 native operations remain during consumer cutover.
+ * format core. The production shared object exports Common V2 only.
  */
 #include <infiltratr/filesystem_module_v2.h>
 #include <infiltratr/filesystem_ro_sessions_v2.h>
+/* Production image identity is consumed by the strict Common V2 manager.
+ * GNU retain keeps the marker through native LTO and --gc-sections. */
+__attribute__((used, retain, section(".ifsmeta")))
+static const char ifs_ext4_v2_identity[] = "IFS-MODULE:ext4:common2";
+
 #include "../native/filesystems/ext4/core/ext4_core.h"
 #include <stddef.h>
 #include <stdint.h>
