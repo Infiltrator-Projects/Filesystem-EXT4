@@ -21,7 +21,7 @@ jobs:
           test -f build/EXT4.so
           test ! -e build/EXT2.so
           test ! -e build/EXT3.so
-          nm -D build/EXT4.so | grep -F 'infiltrator_filesystem_ext_v1'
+          sh tests/check_v2_exports.sh build/EXT4.so
       - name: Verify EXT4-only runtime installation and one illustrated PDF
         shell: bash
         run: |
