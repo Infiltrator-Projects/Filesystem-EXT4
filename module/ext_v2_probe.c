@@ -3,6 +3,7 @@
  * format core. Existing V1 native operations remain during consumer cutover.
  */
 #include <infiltratr/filesystem_module_v2.h>
+#include <infiltratr/filesystem_ro_sessions_v2.h>
 #include "../native/filesystems/ext4/core/ext4_core.h"
 #include <stddef.h>
 #include <stdint.h>
@@ -96,13 +97,10 @@ static int probe(const IfsFsHostRuntimeV2 *h,uint32_t *variant)
  * feature flags and geometry; this reports the superblock's RECORDED free
  * block count, not an independently scanned block bitmap. The host alone
  * owns media I/O and writable access is always rejected. */
-static struct {
-    uintptr_t generation,active;
-    IfsFsVolumeInfoV2 info;
-} session;
-static int mounted(void *handle)
-{ return session.active && (uintptr_t)handle==session.active; }
-static int mount_volume(const IfsFsHostRuntimeV2 *h, void **volume,
+/* Common V2 owns independent read-only mount sessions, not one global volume.
+ * This metadata-only provider does not claim namespace STAT/LIST/READ yet. */
+static IfsFsReadOnlySessionsV2 sessions = IFS_FS_RO_SESSIONS_INIT_V2;
+static int mount_volume(const IfsFsHostRuntimeV2 *h,void **volume,
                         IfsFsVolumeInfoV2 *info)
 {
     IfsFsVolumeInfoV2 measured={0};
@@ -113,29 +111,14 @@ static int mount_volume(const IfsFsHostRuntimeV2 *h, void **volume,
     *volume=NULL;
     if(!ifs_fs_host_v2_valid(h))return IFS_FS_INVALID;
     if(!(h->capabilities & IFS_FS_HOST_READ_ONLY))return IFS_FS_ACCESS;
-    if(session.active || session.generation==UINTPTR_MAX)return IFS_FS_BUSY;
     rc=inspect(h,&variant,&measured);
     if(rc!=IFS_FS_OK)return rc;
-    session.info=measured;
-    session.active=++session.generation;
-    *info=measured;
-    *volume=(void *)session.active;
-    return IFS_FS_OK;
+    return ifs_fs_ro_session_open_v2(&sessions,&measured,volume,info);
 }
 static int unmount_volume(void *volume)
-{
-    if(!mounted(volume))return IFS_FS_INVALID;
-    session.active=0u;
-    session.info=(IfsFsVolumeInfoV2){0};
-    return IFS_FS_OK;
-}
+{ return ifs_fs_ro_session_close_v2(&sessions,volume); }
 static int query_volume(void *volume,IfsFsVolumeInfoV2 *info)
-{
-    if(!mounted(volume) || !info ||
-       info->structure_bytes<sizeof(*info))return IFS_FS_INVALID;
-    *info=session.info;
-    return IFS_FS_OK;
-}
+{ return ifs_fs_ro_session_query_v2(&sessions,volume,info); }
 static const IfsFsVolumeOpsV2 volume_ops={
     .header={IFS_FS_GROUP_ABI_V2,sizeof(IfsFsVolumeOpsV2),
              IFS_FS_GROUP_VOLUME,0u,IFS_FS_VOLUME_QUERY},

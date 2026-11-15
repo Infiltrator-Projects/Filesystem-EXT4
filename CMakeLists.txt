@@ -12,7 +12,7 @@ set(INFILTRATR_COMMON_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(INFILTRATR_COMMON_BUILD_SHARED OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(infiltratr_common
  GIT_REPOSITORY https://github.com/Infiltrator-Projects/Libraries.git
- GIT_TAG 4c92c8dcd7e03afd4bab3105e143dbabd72c8adc)
+ GIT_TAG c262a7d1011e46ce9431cbe4d4f899f290030030)
 FetchContent_MakeAvailable(infiltratr_common)
 # The embedded Common SDK is linked, not installed with filesystem runtime modules.
 set_property(DIRECTORY "${infiltratr_common_SOURCE_DIR}" PROPERTY EXCLUDE_FROM_ALL TRUE)
