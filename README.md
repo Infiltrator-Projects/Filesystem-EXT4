@@ -33,3 +33,11 @@ The old Defragmenter CLI and V1 service adapter are absent from the installed
 shared object. Tests use disposable real EXT4 images as well as OVMF kernel
 handoff. This does not yet register a Linux VFS mount or support writable
 root mounting; the generic kernel-side Common V2 loader remains required.
+
+## Native file-mode and ownership metadata (Common V2)
+
+The EXT4.so portable engine exports `METADATA.GET_MODE` using the verified
+inode permission and owner/group fields. InfiltratorOS Kernel can now present
+real executable bits and ownership through the generic V2 metadata group,
+without introducing EXT4-specific code into the Kernel. Timestamp reporting,
+metadata mutation and writable mounting remain separate qualifications.

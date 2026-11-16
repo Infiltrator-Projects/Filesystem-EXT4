@@ -52,7 +52,11 @@ int main(int argc,char **argv)
     CHECK(ifs_fs_api_v2_valid(api,"ext4"));
     const IfsFsCoreOpsV2 *core=(const void *)ifs_fs_group_v2(api,IFS_FS_GROUP_CORE);
     const IfsFsVolumeOpsV2 *volume=(const void *)ifs_fs_group_v2(api,IFS_FS_GROUP_VOLUME);
+    const IfsFsMetadataOpsV2 *metadata =
+        (const void *)ifs_fs_group_v2(api, IFS_FS_GROUP_METADATA);
     CHECK(core && volume && core->stat && core->directory_entry && core->read);
+    CHECK(metadata && metadata->get &&
+          metadata->header.capabilities == IFS_FS_META_GET_MODE);
     struct stat st;
     CHECK(stat(argv[1],&st)==0 && st.st_size>0);
     Image images[2]={{.fd=-1,.sector=512,.bytes=(uint64_t)st.st_size},
@@ -75,6 +79,13 @@ int main(int argc,char **argv)
     IfsFsEntryV2 entry={.structure_bytes=sizeof(entry),
                         .name=name,.name_capacity=sizeof(name)};
     CHECK(core->stat(a,"/hello.txt",&entry)==IFS_FS_OK);
+    IfsFsMetadataV2 mode = { .structure_bytes = sizeof(mode) };
+    CHECK(metadata->get(a, "/hello.txt", &mode) == IFS_FS_OK);
+    CHECK(mode.mask == IFS_FS_META_GET_MODE);
+    CHECK((mode.mode & 0170000u) == 0100000u);
+    mode.structure_bytes = sizeof(mode);
+    CHECK(metadata->get(b, "/sub", &mode) == IFS_FS_OK);
+    CHECK((mode.mode & 0170000u) == 0040000u);
     CHECK(entry.type==IFS_FS_ENTRY_FILE);
     CHECK(strcmp(name,"hello.txt")==0);
     const char expected[]="Common V2 EXT4 shared-object namespace\n";

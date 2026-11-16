@@ -25,7 +25,8 @@ typedef struct {
 typedef struct {
     uint64_t bytes;
     uint32_t flags, seed;
-    uint16_t type;
+    uint16_t type, mode;
+    uint32_t owner, group;
     uint8_t map[60];
 } Inode;
 
@@ -193,7 +194,15 @@ static int read_inode(const Volume *v, uint32_t number, Inode *inode)
         if ((extra >= 4 ? crc : (uint16_t)crc) != expected)
             return IFS_FS_CORRUPT;
     }
-    inode->type = u16(raw) & FILE_TYPE;
+    inode->mode = u16(raw);
+    inode->type = inode->mode & FILE_TYPE;
+    /* EXT4 inode ownership is split across the original 16-bit fields
+     * and osd2 high bits. The freestanding provider supplies permissions,
+     * not the VFS adapter or a copied format-specific Kernel parser. */
+    inode->owner = (uint32_t)u16(raw + 2) |
+                   ((uint32_t)u16(raw + 120) << 16);
+    inode->group = (uint32_t)u16(raw + 24) |
+                   ((uint32_t)u16(raw + 122) << 16);
     inode->flags = u32(raw + 32);
     inode->bytes = u32(raw + 4) | ((uint64_t)u32(raw + 108) << 32);
     if (inode->flags & UNSUPPORTED_INODE_FLAGS)
@@ -652,6 +661,34 @@ static const IfsFsCoreOpsV2 core = {
     .directory_entry = list, .read = read_file
 };
 
+static int metadata_get(void *handle, const char *path,
+                        IfsFsMetadataV2 *metadata)
+{
+    Volume *v = mounted(handle);
+    Inode inode;
+    Dirent name;
+    int rc;
+    if (!v || !metadata ||
+        metadata->structure_bytes < sizeof(*metadata))
+        return IFS_FS_INVALID;
+    rc = resolve(v, path, &inode, &name);
+    if (rc != IFS_FS_OK)
+        return rc;
+    *metadata = (IfsFsMetadataV2){0};
+    metadata->structure_bytes = sizeof(*metadata);
+    metadata->mask = IFS_FS_META_GET_MODE;
+    metadata->mode = inode.mode;
+    metadata->owner = inode.owner;
+    metadata->group = inode.group;
+    return IFS_FS_OK;
+}
+
+static const IfsFsMetadataOpsV2 metadata_ops = {
+    .header = {IFS_FS_GROUP_ABI_V2, sizeof(metadata_ops),
+               IFS_FS_GROUP_METADATA, 0, IFS_FS_META_GET_MODE},
+    .get = metadata_get
+};
+
 static const IfsFsVolumeOpsV2 ops = {
     .header = {IFS_FS_GROUP_ABI_V2, sizeof(ops), IFS_FS_GROUP_VOLUME, 0,
                IFS_FS_VOLUME_QUERY | IFS_FS_VOLUME_LABEL_GET},
@@ -666,6 +703,8 @@ static const IfsFsGroupHeaderV2 *query(uint32_t group, uint32_t lo, uint32_t hi)
         return &core.header;
     if (group == IFS_FS_GROUP_VOLUME)
         return &ops.header;
+    if (group == IFS_FS_GROUP_METADATA)
+        return &metadata_ops.header;
     return NULL;
 }
 
@@ -681,7 +720,9 @@ const IfsFsModuleApiV2 *infiltrator_filesystem_api_v2(void)
 #else
             IFS_FS_PROFILE_FREESTANDING | IFS_FS_PROFILE_FIRMWARE,
 #endif
-        .group_mask = IFS_FS_GROUP_BIT(IFS_FS_GROUP_CORE) | IFS_FS_GROUP_BIT(IFS_FS_GROUP_VOLUME),
+        .group_mask = IFS_FS_GROUP_BIT(IFS_FS_GROUP_CORE) |
+                      IFS_FS_GROUP_BIT(IFS_FS_GROUP_VOLUME) |
+                      IFS_FS_GROUP_BIT(IFS_FS_GROUP_METADATA),
         .query_group = query
     };
     return &api;
