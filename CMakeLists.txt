@@ -37,7 +37,7 @@ set_source_files_properties("${EXT_SRC}/ext_worker.c" PROPERTIES
  COMPILE_DEFINITIONS "main=ifs_ext_worker_main")
 set_source_files_properties("${EXT_SRC}/ext_metadata_worker.c" PROPERTIES
  COMPILE_DEFINITIONS "main=ifs_ext_metadata_main")
-add_library(ext-core OBJECT
+add_library(ext-core OBJECT EXCLUDE_FROM_ALL
  "${EXT_SRC}/ext_disk.c"
  "${EXT_SRC}/ext_common.c"
  "${EXT_SRC}/ext_catalog.c"
@@ -56,9 +56,11 @@ target_link_libraries(ext-core PUBLIC InfiltratrCommon::Common OpenSSL::Crypto S
 # Never build those variants out of the EXT4 repository.
 foreach(kind IN ITEMS ext4)
  string(TOUPPER "${kind}" module_name)
+ # Production ABI is only Common V2; the old Defragmenter CLI/host workers
+ # are NOT linked into EXT4.so. This provider owns one portable format core
+ # shared with its separate firmware reader.
  add_library(ext-${kind}-driver SHARED
-  $<TARGET_OBJECTS:ext-core>
-  compat/legacy_services.c compat/runtime_alloc.c
+  native/filesystems/ext4/core/ext4_core.c
   module/firmware/ext4.c)
  set_target_properties(ext-${kind}-driver PROPERTIES PREFIX "" OUTPUT_NAME "${module_name}" SUFFIX ".so")
  target_compile_definitions(ext-${kind}-driver PRIVATE
@@ -113,11 +115,28 @@ endforeach()
 # The bitmap/descriptor cache regression came from Defragmenter, but the
 # private EXT disk implementation and its native unit tests live here.
 if(BUILD_TESTING)
+ # Retain historical worker regressions in test-only binaries. They are
+ # deliberately absent from all independent EXT4.so install/release payloads.
+ add_library(ext-legacy-test-support SHARED
+  $<TARGET_OBJECTS:ext-core>
+  compat/legacy_services.c compat/runtime_alloc.c module/ext_module.c)
+ target_compile_definitions(ext-legacy-test-support PRIVATE
+  _GNU_SOURCE _FILE_OFFSET_BITS=64 IFS_EXT_FORMAT_ID="ext4")
+ target_include_directories(ext-legacy-test-support PRIVATE
+  "${EXT_SRC}" "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/include"
+  "${CMAKE_CURRENT_SOURCE_DIR}/include"
+  "${CMAKE_CURRENT_SOURCE_DIR}/compat"
+  "${CMAKE_CURRENT_BINARY_DIR}")
+ target_link_libraries(ext-legacy-test-support PRIVATE
+  InfiltratrCommon::Common OpenSSL::Crypto SQLite::SQLite3 Threads::Threads)
+ add_test(NAME ext4-production-provider-boundary
+  COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_production_boundary.sh"
+          "$<TARGET_FILE:ext-ext4-driver>")
  add_library(ext-test-host STATIC tests/test_host_services.c)
  target_include_directories(ext-test-host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_SOURCE_DIR}/compat")
  target_compile_definitions(ext-test-host PRIVATE _GNU_SOURCE _FILE_OFFSET_BITS=64)
  target_compile_options(ext-test-host PRIVATE -Wall -Wextra -Wpedantic -Werror)
- target_link_libraries(ext-test-host PUBLIC ext-ext4-driver)
+ target_link_libraries(ext-test-host PUBLIC ext-legacy-test-support)
  add_executable(ext-bitmap-cache-test tests/test_ext_bitmap_cache.c)
  target_include_directories(ext-bitmap-cache-test PRIVATE
    "${CMAKE_CURRENT_SOURCE_DIR}/migration/defragmenter/native" "${CMAKE_CURRENT_SOURCE_DIR}/compat" "${CMAKE_CURRENT_SOURCE_DIR}/tests")
