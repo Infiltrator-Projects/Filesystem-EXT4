@@ -44,3 +44,13 @@ formatting, journal recovery, or safe defragmentation. The operating-system
 Kernel still needs a verified generic Common V2 ELF execution/VFS adapter to
 mount this SO; do not fall back to the Linux native EXT4 implementation to
 claim that step completed.
+
+## Independent Common V2 permissions export (1.0.14)
+
+The freestanding and hosted EXT4 format engine now returns real on-disk
+file-mode and owner/group metadata through `METADATA.GET_MODE`.
+This comes directly from the independent provider's validated inode reader,
+not from any Kernel filesystem implementation. Native exec/permission and
+ownership semantics can now be connected by the generic Common V2 VFS
+adapter. Other metadata groups and writable mount behaviour still require
+independent qualification and should not be represented as complete.
