@@ -15,3 +15,32 @@ Free space is the **recorded superblock count**, not a scanned bitmap;
 transaction, namespace mutation, journal recovery and DEFRAG operations
 remain in their original independent engine and are not advertised as
 V2 MAP/PLAN/EXECUTE/VERIFY/RECOVER until actually qualified.
+
+## Hosted Common V2 namespace, sourced from the firmware reader (1.0.13)
+
+The installed `EXT4.so` uses the **same source-owned portable reader** as
+BOOT's freestanding ELF (`module/firmware/ext4.c`) with distinct hosted and
+firmware compilation profiles. The hosted Common V2 descriptor now supports
+`CORE.PROBE / MOUNT / UNMOUNT / STAT / LIST / READ` and
+`VOLUME.QUERY / LABEL_GET` on validated clean EXT4 images. The
+`.infiltrator_boot` payload still contains the independent freestanding
+ELF, not hosted glibc/libcrypto machinery.
+
+Mount sessions are separate (up to 32 active volumes), retain a bounded copy
+of the versioned host callback descriptor, and never recycle an opaque mount
+cookie. The host must serialize unmount against operations on that mount.
+Host I/O remains partition-relative, bounded, aligned and read-only. A real
+EXT4 image regression exercises 512-byte and 4 KiB host logical sectors,
+symlink resolution, file reading, directory listing and stale-handle refusal;
+its SHA-256 must be unchanged. BOOT's independent OVMF/NVMe kernel-handoff
+qualification remains in place.
+
+**Production payload no longer links the V1 Defragmenter CLI / host service
+adapters.** The historical bitmap/cache and worker regression code is built
+only into test targets; it is not installed or included in `EXT4.so`.
+
+This is not Linux root mounting, VFS registration, writable mounting,
+formatting, journal recovery, or safe defragmentation. The operating-system
+Kernel still needs a verified generic Common V2 ELF execution/VFS adapter to
+mount this SO; do not fall back to the Linux native EXT4 implementation to
+claim that step completed.

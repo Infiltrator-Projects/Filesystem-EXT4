@@ -22,3 +22,14 @@ metadata checksums on clean EXT4 volumes with 1, 2 or 4 KiB blocks. It
 rejects volumes that require journal replay and layouts outside its supported
 feature set. Automatic ESP deployment requires a qualified boot entry and
 preservation of the existing recovery entry.
+
+## Hosted Common V2 namespace (1.0.13)
+
+The installed `EXT4.so` now implements read-only `CORE.STAT`,
+`CORE.LIST` and `CORE.READ` using the identical format-reader source as the
+firmware ELF. Both profiles use the canonical EXT4 core and bounded Common V2
+host I/O; the hosted module supports multiple independent mount sessions.
+The old Defragmenter CLI and V1 service adapter are absent from the installed
+shared object. Tests use disposable real EXT4 images as well as OVMF kernel
+handoff. This does not yet register a Linux VFS mount or support writable
+root mounting; the generic kernel-side Common V2 loader remains required.
