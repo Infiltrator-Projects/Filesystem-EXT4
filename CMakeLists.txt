@@ -59,10 +59,10 @@ foreach(kind IN ITEMS ext4)
  add_library(ext-${kind}-driver SHARED
   $<TARGET_OBJECTS:ext-core>
   compat/legacy_services.c compat/runtime_alloc.c
-  module/ext_v2_probe.c)
+  module/firmware/ext4.c)
  set_target_properties(ext-${kind}-driver PROPERTIES PREFIX "" OUTPUT_NAME "${module_name}" SUFFIX ".so")
  target_compile_definitions(ext-${kind}-driver PRIVATE
-  _GNU_SOURCE _FILE_OFFSET_BITS=64 IFS_EXT_FORMAT_ID="${kind}")
+  _GNU_SOURCE _FILE_OFFSET_BITS=64 IFS_EXT4_HOSTED_BUILD=1 IFS_EXT_FORMAT_ID="${kind}")
  target_compile_options(ext-${kind}-driver PRIVATE -Wall -Wextra -Wpedantic -Werror)
  target_link_options(ext-${kind}-driver PRIVATE -Wl,-z,defs)
  target_include_directories(ext-${kind}-driver PRIVATE
@@ -87,6 +87,18 @@ foreach(kind IN ITEMS ext4)
   target_link_libraries(ext4-v2-probe-test PRIVATE ext-${kind}-driver InfiltratrCommon::Common)
   target_compile_options(ext4-v2-probe-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
   add_test(NAME ext4-common-v2-probe COMMAND ext4-v2-probe-test)
+  # Real ext4 images, file reads, directory enumeration, independent mounts
+  # and 4-KiB logical sector transport must pass through the released SO.
+  add_executable(ext4-v2-namespace-test tests/test_ext4_namespace.c)
+  target_include_directories(ext4-v2-namespace-test PRIVATE
+    "${infiltratr_common_SOURCE_DIR}/include")
+  target_link_libraries(ext4-v2-namespace-test PRIVATE
+    ext-${kind}-driver InfiltratrCommon::Common)
+  target_compile_options(ext4-v2-namespace-test PRIVATE
+    -Wall -Wextra -Wpedantic -Werror)
+  add_test(NAME ext4-v2-real-namespace
+    COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/tests/ext4_real_namespace.sh"
+            "$<TARGET_FILE:ext4-v2-namespace-test>")
   add_test(NAME ext4-v2-only-dynamic-export
     COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_v2_exports.sh" "$<TARGET_FILE:ext-${kind}-driver>")
  endif()

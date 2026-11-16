@@ -34,8 +34,23 @@ typedef struct {
     char name[256];
 } Dirent;
 
-static Volume volume;
-static uintptr_t generation, active;
+/* One portable EXT4 format engine backs hosted and firmware profiles.
+ * Slots are bounded and do not reuse opaque mount cookies. The host must
+ * serialize operations on a mount with unmount, as required by the lifecycle
+ * contract. No OS-native filesystem code or userspace proxy is involved. */
+enum { MAX_MOUNTS = 32 };
+typedef struct {
+    Volume volume;
+    IfsFsHostRuntimeV2 host;
+    uintptr_t cookie;
+} MountSlot;
+static MountSlot mounts[MAX_MOUNTS];
+static uintptr_t generation;
+
+#if defined(IFS_EXT4_HOSTED_BUILD)
+__attribute__((used, retain, section(".ifsmeta")))
+static const char ext4_identity[] = "IFS-MODULE:ext4:common2";
+#endif
 
 static uint16_t u16(const uint8_t *p)
 {
@@ -480,22 +495,29 @@ static int entry_info(const Inode *inode, const Dirent *name, IfsFsEntryV2 *entr
     return IFS_FS_OK;
 }
 
-static bool mounted(void *handle)
+/* Only compare opaque cookie values; never dereference user-supplied
+ * handles. A cookie is never recycled even when its slot is reused. */
+static Volume *mounted(void *handle)
 {
-    return active && (uintptr_t)handle == active;
+    uintptr_t value = (uintptr_t)handle;
+    if (!value) return NULL;
+    for (unsigned i = 0; i < MAX_MOUNTS; ++i)
+        if (mounts[i].cookie == value)
+            return &mounts[i].volume;
+    return NULL;
 }
 
 static int probe(const IfsFsHostRuntimeV2 *host, uint32_t *variant)
 {
-    if (!variant)
-        return IFS_FS_INVALID;
     Volume candidate;
+    if (!variant) return IFS_FS_INVALID;
     int rc = open_volume(&candidate, host);
     *variant = rc == IFS_FS_OK ? 4u : 0u;
     return rc;
 }
 
-static int mount(const IfsFsHostRuntimeV2 *host, void **handle, IfsFsVolumeInfoV2 *info)
+static int mount(const IfsFsHostRuntimeV2 *host, void **handle,
+                 IfsFsVolumeInfoV2 *info)
 {
     if (!handle || !info || info->structure_bytes < sizeof(*info))
         return IFS_FS_INVALID;
@@ -504,91 +526,120 @@ static int mount(const IfsFsHostRuntimeV2 *host, void **handle, IfsFsVolumeInfoV
         return IFS_FS_INVALID;
     if (!(host->capabilities & IFS_FS_HOST_READ_ONLY))
         return IFS_FS_ACCESS;
-    if (active || generation == UINTPTR_MAX)
+    if (generation == UINTPTR_MAX)
         return IFS_FS_BUSY;
-    int rc = open_volume(&volume, host);
-    if (rc != IFS_FS_OK)
+    MountSlot *slot = NULL;
+    for (unsigned i = 0; i < MAX_MOUNTS; ++i)
+        if (!mounts[i].cookie) {
+            slot = &mounts[i];
+            break;
+        }
+    if (!slot)
+        return IFS_FS_BUSY;
+
+    /* A host may pass a short, size-versioned Common V2 descriptor on the
+     * stack. Retain a bounded copy for the entire mount lifetime. */
+    const uint32_t n = host->structure_bytes < sizeof(slot->host) ?
+        host->structure_bytes : sizeof(slot->host);
+    uint8_t *destination = (uint8_t *)&slot->host;
+    const uint8_t *source = (const uint8_t *)host;
+    for (uint32_t i = 0; i < sizeof(slot->host); ++i)
+        destination[i] = i < n ? source[i] : 0;
+    slot->host.structure_bytes = n;
+    int rc = open_volume(&slot->volume, &slot->host);
+    if (rc != IFS_FS_OK) {
+        slot->volume.host = NULL;
         return rc;
+    }
     Inode root;
-    rc = read_inode(&volume, ROOT, &root);
-    if (rc != IFS_FS_OK)
-        return rc;
-    if (root.type != FILE_DIRECTORY)
-        return IFS_FS_CORRUPT;
-    active = ++generation;
-    *handle = (void *)active;
-    *info = volume.info;
+    rc = read_inode(&slot->volume, ROOT, &root);
+    if (rc != IFS_FS_OK || root.type != FILE_DIRECTORY) {
+        slot->volume.host = NULL;
+        return rc != IFS_FS_OK ? rc : IFS_FS_CORRUPT;
+    }
+    uintptr_t cookie;
+    do {
+        if (generation == UINTPTR_MAX) {
+            slot->volume.host = NULL;
+            return IFS_FS_BUSY;
+        }
+        cookie = (++generation) ^ (uintptr_t)(void *)mounts;
+    } while (!cookie);
+    slot->cookie = cookie;
+    *handle = (void *)cookie;
+    *info = slot->volume.info;
     return IFS_FS_OK;
 }
 
 static int unmount(void *handle)
 {
-    if (!mounted(handle))
-        return IFS_FS_INVALID;
-    active = 0;
-    volume.host = NULL;
-    return IFS_FS_OK;
+    uintptr_t token = (uintptr_t)handle;
+    if (!token) return IFS_FS_INVALID;
+    for (unsigned i = 0; i < MAX_MOUNTS; ++i)
+        if (mounts[i].cookie == token) {
+            mounts[i].cookie = 0;
+            mounts[i].volume.host = NULL;
+            return IFS_FS_OK;
+        }
+    return IFS_FS_INVALID;
 }
 
 static int stat_path(void *handle, const char *path, IfsFsEntryV2 *entry)
 {
-    if (!mounted(handle))
-        return IFS_FS_INVALID;
+    Volume *v = mounted(handle);
+    if (!v) return IFS_FS_INVALID;
     Inode inode;
     Dirent name;
-    int rc = resolve(&volume, path, &inode, &name);
+    int rc = resolve(v, path, &inode, &name);
     return rc == IFS_FS_OK ? entry_info(&inode, &name, entry) : rc;
 }
 
-static int list(void *handle, const char *path, uint32_t index, IfsFsEntryV2 *entry)
+static int list(void *handle, const char *path, uint32_t index,
+                IfsFsEntryV2 *entry)
 {
-    if (!mounted(handle))
-        return IFS_FS_INVALID;
+    Volume *v = mounted(handle);
+    if (!v) return IFS_FS_INVALID;
     Inode inode;
     Dirent name;
-    int rc = resolve(&volume, path, &inode, &name);
-    if (rc != IFS_FS_OK)
-        return rc;
-    rc = find_entry(&volume, &inode, NULL, 0, index, &name);
-    if (rc != IFS_FS_OK)
-        return rc;
-    rc = read_inode(&volume, name.number, &inode);
+    int rc = resolve(v, path, &inode, &name);
+    if (rc != IFS_FS_OK) return rc;
+    rc = find_entry(v, &inode, NULL, 0, index, &name);
+    if (rc != IFS_FS_OK) return rc;
+    rc = read_inode(v, name.number, &inode);
     return rc == IFS_FS_OK ? entry_info(&inode, &name, entry) : rc;
 }
 
-static int read_file(void *handle, const char *path, uint64_t offset, void *data, uint32_t bytes)
+static int read_file(void *handle, const char *path, uint64_t offset,
+                     void *data, uint32_t bytes)
 {
-    if (!mounted(handle))
-        return IFS_FS_INVALID;
+    Volume *v = mounted(handle);
+    if (!v) return IFS_FS_INVALID;
     Inode inode;
     Dirent name;
-    int rc = resolve(&volume, path, &inode, &name);
-    if (rc != IFS_FS_OK)
-        return rc;
-    if (inode.type != FILE_REGULAR)
-        return IFS_FS_INVALID;
-    return read_data(&volume, &inode, offset, data, bytes);
+    int rc = resolve(v, path, &inode, &name);
+    if (rc != IFS_FS_OK) return rc;
+    if (inode.type != FILE_REGULAR) return IFS_FS_INVALID;
+    return read_data(v, &inode, offset, data, bytes);
 }
 
 static int query_volume(void *handle, IfsFsVolumeInfoV2 *info)
 {
-    if (!mounted(handle) || !info || info->structure_bytes < sizeof(*info))
+    Volume *v = mounted(handle);
+    if (!v || !info || info->structure_bytes < sizeof(*info))
         return IFS_FS_INVALID;
-    *info = volume.info;
+    *info = v->info;
     return IFS_FS_OK;
 }
 
 static int label(void *handle, char *out, uint32_t capacity, uint32_t *bytes)
 {
-    if (!mounted(handle) || !out || !bytes)
-        return IFS_FS_INVALID;
+    Volume *v = mounted(handle);
+    if (!v || !out || !bytes) return IFS_FS_INVALID;
     uint32_t length = 0;
-    while (volume.label[length])
-        ++length;
-    if (capacity <= length)
-        return IFS_FS_INVALID;
+    while (v->label[length]) ++length;
+    if (capacity <= length) return IFS_FS_INVALID;
     for (uint32_t i = 0; i <= length; ++i)
-        out[i] = volume.label[i];
+        out[i] = v->label[i];
     *bytes = length;
     return IFS_FS_OK;
 }
@@ -624,8 +675,12 @@ const IfsFsModuleApiV2 *infiltrator_filesystem_api_v2(void)
     static const IfsFsModuleApiV2 api = {
         .abi_version = IFS_FS_COMMON_ABI_V2, .structure_bytes = sizeof(api),
         .format_id = "ext4",
-        .runtime_profiles = IFS_FS_PROFILE_HOSTED | IFS_FS_PROFILE_FREESTANDING |
-                            IFS_FS_PROFILE_FIRMWARE,
+        .runtime_profiles =
+#if defined(IFS_EXT4_HOSTED_BUILD)
+            IFS_FS_PROFILE_HOSTED,
+#else
+            IFS_FS_PROFILE_FREESTANDING | IFS_FS_PROFILE_FIRMWARE,
+#endif
         .group_mask = IFS_FS_GROUP_BIT(IFS_FS_GROUP_CORE) | IFS_FS_GROUP_BIT(IFS_FS_GROUP_VOLUME),
         .query_group = query
     };
