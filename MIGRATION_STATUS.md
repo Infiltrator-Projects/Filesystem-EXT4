@@ -54,3 +54,21 @@ not from any Kernel filesystem implementation. Native exec/permission and
 ownership semantics can now be connected by the generic Common V2 VFS
 adapter. Other metadata groups and writable mount behaviour still require
 independent qualification and should not be represented as complete.
+
+## Indexed-directory and release boundary corrections (1.0.15)
+
+The portable Common V2 STAT operation returns actual directory byte sizes,
+including populated indexed HTree directories, instead of zero. A disposable
+real-image regression now uses e2fsck -D to construct a metadata-checksummed,
+multi-block indexed /etc containing fstab. It checks CORE.STAT, CORE.LIST and
+CORE.READ through two independent hosted mounts. This host qualification does
+not prove that Zabbix's particular live EXT4 layout, firmware bridge, or
+signed direct-boot handoff works; BOOT now retains the UEFI open error for
+diagnosis rather than obscuring it behind a generic missing-file result.
+
+The ordinary portable DEB and source-embedded native RUN now install the V2 SO
+and its manual only. The ext4.ko source is retained for an explicitly selected
+legacy migration experiment but is neither automatically compiled during
+native installation nor published as a release asset. The CMake product version
+is read from VERSION, and stale V1 ABI claims were removed from the release
+config. The old V1 test harness remains source-only pending separate cleanup.

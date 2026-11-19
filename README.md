@@ -5,11 +5,11 @@ Independent filesystem implementation for InfiltratorOS, using the shared Common
 
 - `/System/Filesystems/EXT4.so`
 - `/System/Resources/Documentation/Filesystem-EXT4.pdf`
-- `/System/Kernel/Filesystems/ext4.ko`
+- `/System/Kernel/Filesystems/ext4.ko` (only when expressly requested for a migration experiment)
 
-The published Debian package installs these three regular files. A manual native RUN compiles the shared object and Linux adapter locally, generates the PDF, and replaces all three files. It uses the running kernel headers by default. Use `--kernel-build DIRECTORY` for a prepared kernel build with `Module.symvers`. The kernel module is stored for manual use.
+The published Debian package and the ordinary native RUN install only the Common V2 `EXT4.so` and illustrated PDF. The independent Linux-specific `ext4.ko` remains in source for explicitly requested migration experiments (`--kernel-build DIRECTORY` with prepared `Module.symvers`), but is not built or published by the normal release workflow. Direct InfiltratorOS filesystem authority remains the Common V2 SO, not this adapter.
 
-InfiltratorOS calls `--system-package-mode` and decides which outputs need updating. Its worker builds a missing or older SO, repairs the PDF independently, and stores the matching released kernel module when available. Use `--build-only --output DIRECTORY` to build a Debian package.
+InfiltratorOS calls `--system-package-mode` and decides which outputs need updating. Its worker builds a missing or older SO and repairs the PDF independently. The normal release does not carry a separately owned EXT4 kernel module. Use `--build-only --output DIRECTORY` to build a Debian package.
 
 ## BOOT qualification
 

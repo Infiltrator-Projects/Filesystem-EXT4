@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
-project(FilesystemEXT VERSION 1.0.0 LANGUAGES C)
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" EXT4_PACKAGE_VERSION LIMIT_COUNT 1)
+if(NOT EXT4_PACKAGE_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
+  message(FATAL_ERROR "Invalid EXT4 release VERSION")
+endif()
+project(FilesystemEXT VERSION "${EXT4_PACKAGE_VERSION}" LANGUAGES C)
 include(CTest)
 include(FetchContent)
 find_package(OpenSSL REQUIRED)
@@ -31,7 +35,7 @@ add_custom_command(OUTPUT "${EXT4_FIRMWARE_ELF}"
   "${infiltratr_common_SOURCE_DIR}/include/infiltratr/filesystem_module_v2.h"
  VERBATIM)
 add_custom_target(ext4-firmware-elf DEPENDS "${EXT4_FIRMWARE_ELF}")
-file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/version.h" "#define LD_VERSION \"1.0.0\"\n")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/version.h" "#define LD_VERSION \"${PROJECT_VERSION}\"\n")
 set(EXT_SRC "${CMAKE_CURRENT_SOURCE_DIR}/migration/defragmenter/native")
 set_source_files_properties("${EXT_SRC}/ext_worker.c" PROPERTIES
  COMPILE_DEFINITIONS "main=ifs_ext_worker_main")
