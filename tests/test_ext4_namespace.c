@@ -47,7 +47,8 @@ static IfsFsHostRuntimeV2 host(Image *image)
 }
 int main(int argc,char **argv)
 {
-    CHECK(argc==2);
+    CHECK(argc==2 || (argc==3 && strcmp(argv[2],"--corrupt-htree")==0));
+    const int corrupt_htree=argc==3;
     const IfsFsModuleApiV2 *api=infiltrator_filesystem_api_v2();
     CHECK(ifs_fs_api_v2_valid(api,"ext4"));
     const IfsFsCoreOpsV2 *core=(const void *)ifs_fs_group_v2(api,IFS_FS_GROUP_CORE);
@@ -78,6 +79,17 @@ int main(int argc,char **argv)
     char name[256]={0};
     IfsFsEntryV2 entry={.structure_bytes=sizeof(entry),
                         .name=name,.name_capacity=sizeof(name)};
+    if(corrupt_htree) {
+        /* Checksummed HTree metadata is inspected by path traversal, not
+         * at mount time. Independent clean files must remain readable. */
+        CHECK(core->stat(a,"/hello.txt",&entry)==IFS_FS_OK);
+        CHECK(core->stat(a,"/etc/fstab",&entry)==IFS_FS_CORRUPT);
+        CHECK(core->stat(b,"/etc/fstab",&entry)==IFS_FS_CORRUPT);
+        CHECK(core->unmount(a)==IFS_FS_OK);
+        CHECK(core->unmount(b)==IFS_FS_OK);
+        for(unsigned i=0;i<2;++i) close(images[i].fd);
+        return 0;
+    }
     CHECK(core->stat(a,"/hello.txt",&entry)==IFS_FS_OK);
     IfsFsMetadataV2 mode = { .structure_bytes = sizeof(mode) };
     CHECK(metadata->get(a, "/hello.txt", &mode) == IFS_FS_OK);

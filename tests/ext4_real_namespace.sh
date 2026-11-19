@@ -29,3 +29,21 @@ before=$(sha256sum "$work/disk.img" | cut -d' ' -f1)
 "$program" "$work/disk.img"
 after=$(sha256sum "$work/disk.img" | cut -d' ' -f1)
 test "$before" = "$after"
+
+# In a separate disposable copy, flip exactly one bit in the HTree root
+# checksum (dx_tail, final four bytes of the 4 KiB index block). A provider
+# that silently accepts corrupted index metadata must fail qualification.
+# Verify the block mapping before any dd write; NEVER use a device path.
+bad="$work/corrupt-htree.img"
+cp -- "$work/disk.img" "$bad"
+physical=$(debugfs -R 'bmap /etc 0' "$bad" 2>/dev/null | tr -d '[:space:]')
+[[ "$physical" =~ ^[1-9][0-9]*$ ]] || {
+    echo "Failed to resolve indexed /etc block in disposable image" >&2
+    exit 1
+}
+checksum_byte=$((physical * 4096 + 4092))
+old=$(dd if="$bad" bs=1 skip="$checksum_byte" count=1 status=none | od -An -tu1)
+[[ "$old" =~ ^[[:space:]]*[0-9]+[[:space:]]*$ ]] || exit 1
+printf -v replacement '%03o' $((old ^ 1))
+printf '%b' "\\$replacement" | dd of="$bad" bs=1 seek="$checksum_byte" count=1 conv=notrunc status=none
+"$program" "$bad" --corrupt-htree
