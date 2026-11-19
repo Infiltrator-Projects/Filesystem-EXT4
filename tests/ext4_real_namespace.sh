@@ -9,7 +9,9 @@ mkdir -p "$work/tree/sub" "$work/tree/etc"
 printf 'Common V2 EXT4 shared-object namespace\n' > "$work/tree/hello.txt"
 # A populated, checksum-protected HTree directory like Zabbix's /etc.
 printf 'UUID=11111111-2222-3333-4444-555555555555 / ext4 defaults 0 1\n' > "$work/tree/etc/fstab"
-for ((n=0; n<240; ++n)); do
+# Approximately match Zabbix's 12 KiB directory: one HTree root and two
+# leaves, with fstab in a normal leaf rather than an inline inode.
+for ((n=0; n<170; ++n)); do
     printf 'entry-%04d\n' "$n" > "$(printf '%s/tree/etc/entry-%04d-abcdefghijklmno' "$work" "$n")"
 done
 printf 'inside the directory\n' > "$work/tree/sub/inside.txt"
