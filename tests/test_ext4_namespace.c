@@ -96,6 +96,28 @@ int main(int argc,char **argv)
     memset(data,0,sizeof(data));
     CHECK(core->read(b,"/alias.txt",0,data,sizeof(expected)-1)==IFS_FS_OK);
     CHECK(memcmp(data,expected,sizeof(expected)-1)==0);
+
+    /* Multi-block, e2fsck-indexed /etc reproduces the firmware failure:
+     * INDEX_FL + metadata_csum + a regular file in an HTree leaf. */
+    CHECK(core->stat(a,"/etc",&entry)==IFS_FS_OK);
+    CHECK(entry.type==IFS_FS_ENTRY_DIRECTORY && entry.size_bytes>=12288);
+    CHECK(core->stat(b,"/etc/fstab",&entry)==IFS_FS_OK);
+    const char fstab[]="UUID=11111111-2222-3333-4444-555555555555 / ext4 defaults 0 1\n";
+    CHECK(entry.type==IFS_FS_ENTRY_FILE && entry.size_bytes==sizeof(fstab)-1);
+    CHECK(strcmp(name,"fstab")==0);
+    char fstab_data[sizeof(fstab)]={0};
+    CHECK(core->read(a,"/etc/fstab",0,fstab_data,sizeof(fstab)-1)==IFS_FS_OK);
+    CHECK(memcmp(fstab_data,fstab,sizeof(fstab)-1)==0);
+    uint32_t etc_entries=0, fstab_entries=0;
+    for(uint32_t n=0;n<500;++n) {
+        entry.structure_bytes=sizeof(entry);
+        int rc=core->directory_entry(b,"/etc",n,&entry);
+        if(rc==IFS_FS_END) break;
+        CHECK(rc==IFS_FS_OK);
+        ++etc_entries;
+        if(strcmp(name,"fstab")==0)++fstab_entries;
+    }
+    CHECK(etc_entries==241 && fstab_entries==1);
     int found=0;
     for(uint32_t n=0;n<64;++n) {
         entry.structure_bytes=sizeof(entry);
