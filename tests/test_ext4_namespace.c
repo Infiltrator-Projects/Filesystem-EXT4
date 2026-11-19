@@ -112,7 +112,7 @@ int main(int argc,char **argv)
     /* Multi-block, e2fsck-indexed /etc reproduces the firmware failure:
      * INDEX_FL + metadata_csum + a regular file in an HTree leaf. */
     CHECK(core->stat(a,"/etc",&entry)==IFS_FS_OK);
-    CHECK(entry.type==IFS_FS_ENTRY_DIRECTORY && entry.size_bytes>=12288);
+    CHECK(entry.type==IFS_FS_ENTRY_DIRECTORY && entry.size_bytes==12288);
     CHECK(core->stat(b,"/etc/fstab",&entry)==IFS_FS_OK);
     const char fstab[]="UUID=11111111-2222-3333-4444-555555555555 / ext4 defaults 0 1\n";
     CHECK(entry.type==IFS_FS_ENTRY_FILE && entry.size_bytes==sizeof(fstab)-1);
