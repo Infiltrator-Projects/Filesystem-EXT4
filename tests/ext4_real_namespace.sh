@@ -26,7 +26,9 @@ mkfs.ext4 -q -F -b 4096 -O "none,$features" -L EXT4ROOT -d "$work/tree" "$work/d
 fsck_status=0
 e2fsck -f -y -D "$work/disk.img" >/dev/null 2>&1 || fsck_status=$?
 case "$fsck_status" in 0|1) ;; *) echo "HTree fixture repair failed ($fsck_status)" >&2; exit 1 ;; esac
-debugfs -R 'htree_dump /etc' "$work/disk.img" 2>&1 | grep -Fq 'Root node dump:'
+tree=$(debugfs -R 'htree_dump /etc' "$work/disk.img" 2>&1)
+grep -Fq 'Root node dump:' <<< "$tree"
+grep -Fq 'Number of entries (count): 2' <<< "$tree"
 before=$(sha256sum "$work/disk.img" | cut -d' ' -f1)
 "$program" "$work/disk.img"
 after=$(sha256sum "$work/disk.img" | cut -d' ' -f1)
