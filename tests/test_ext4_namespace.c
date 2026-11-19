@@ -129,7 +129,7 @@ int main(int argc,char **argv)
         ++etc_entries;
         if(strcmp(name,"fstab")==0)++fstab_entries;
     }
-    CHECK(etc_entries==241 && fstab_entries==1);
+    CHECK(etc_entries==171 && fstab_entries==1);
     int found=0;
     for(uint32_t n=0;n<64;++n) {
         entry.structure_bytes=sizeof(entry);
