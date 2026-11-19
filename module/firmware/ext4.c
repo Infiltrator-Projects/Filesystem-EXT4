@@ -496,7 +496,9 @@ static int entry_info(const Inode *inode, const Dirent *name, IfsFsEntryV2 *entr
     case FILE_LINK: entry->type = IFS_FS_ENTRY_LINK; break;
     default: return IFS_FS_UNSUPPORTED;
     }
-    entry->size_bytes = inode->type == FILE_DIRECTORY ? 0 : inode->bytes;
+    /* EFI_FILE_INFO and Common V2 STAT must report the real directory
+     * byte size. Returning zero hid multi-block/Htree layout from callers. */
+    entry->size_bytes = inode->bytes;
     entry->attributes = 0;
     entry->name_bytes = name->length;
     for (uint32_t i = 0; i <= name->length; ++i)
