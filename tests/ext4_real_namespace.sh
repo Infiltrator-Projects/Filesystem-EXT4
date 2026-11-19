@@ -18,6 +18,13 @@ truncate -s 64M "$work/disk.img"
 features=has_journal,ext_attr,resize_inode,dir_index,filetype,extent,64bit,flex_bg
 features+=,sparse_super,large_file,huge_file,dir_nlink,extra_isize,metadata_csum
 mkfs.ext4 -q -F -b 4096 -O "none,$features" -L EXT4ROOT -d "$work/tree" "$work/disk.img"
+# mkfs -d alone does not guarantee an indexed HTree. Force the independent
+# e2fsprogs index rebuild and refuse to count an ordinary linear directory
+# as an HTree regression. This operates ONLY on the disposable image.
+fsck_status=0
+e2fsck -f -y -D "$work/disk.img" >/dev/null 2>&1 || fsck_status=$?
+case "$fsck_status" in 0|1) ;; *) echo "HTree fixture repair failed ($fsck_status)" >&2; exit 1 ;; esac
+debugfs -R 'htree_dump /etc' "$work/disk.img" 2>&1 | grep -Fq 'Root node dump:'
 before=$(sha256sum "$work/disk.img" | cut -d' ' -f1)
 "$program" "$work/disk.img"
 after=$(sha256sum "$work/disk.img" | cut -d' ' -f1)
