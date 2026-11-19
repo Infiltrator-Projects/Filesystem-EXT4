@@ -12,7 +12,7 @@ printf 'UUID=11111111-2222-3333-4444-555555555555 / ext4 defaults 0 1\n' > "$wor
 # Zabbix's actual fstab is a 665-byte extent-backed regular file.
 padding=$((665 - $(wc -c < "$work/tree/etc/fstab")))
 (( padding >= 0 ))
-head -c "$padding" /dev/zero | tr '\\000' '#' >> "$work/tree/etc/fstab"
+printf '%*s' "$padding" '' | tr ' ' '#' >> "$work/tree/etc/fstab"
 test "$(wc -c < "$work/tree/etc/fstab")" -eq 665
 # Approximately match Zabbix's 12 KiB directory: one HTree root and two
 # leaves, with fstab in a normal leaf rather than an inline inode.
