@@ -72,3 +72,15 @@ legacy migration experiment but is neither automatically compiled during
 native installation nor published as a release asset. The CMake product version
 is read from VERSION, and stale V1 ABI claims were removed from the release
 config. The old V1 test harness remains source-only pending separate cleanup.
+
+## Indexed HTree rejection qualification (1.0.16)
+
+A separate disposable EXT4 image is created after successful read-only
+qualification. Its HTree root checksum is deliberately corrupted by flipping
+one bit, after independently resolving the physical index block with debugfs.
+Common V2 must still read an unrelated file but return CORRUPT on fstab
+lookup on both logical-sector configurations. The clean fixture now requires
+a three-block indexed directory with two HTree leaves and a 665-byte fstab,
+matching the observed Zabbix directory shape. CI guards both correctness
+and image nonmutation. A passing virtual case is not a substitute for
+testing the actual Zabbix disk and signed firmware path.

@@ -115,11 +115,13 @@ int main(int argc,char **argv)
     CHECK(entry.type==IFS_FS_ENTRY_DIRECTORY && entry.size_bytes==12288);
     CHECK(core->stat(b,"/etc/fstab",&entry)==IFS_FS_OK);
     const char fstab[]="UUID=11111111-2222-3333-4444-555555555555 / ext4 defaults 0 1\n";
-    CHECK(entry.type==IFS_FS_ENTRY_FILE && entry.size_bytes==sizeof(fstab)-1);
+    CHECK(entry.type==IFS_FS_ENTRY_FILE && entry.size_bytes==665u);
     CHECK(strcmp(name,"fstab")==0);
-    char fstab_data[sizeof(fstab)]={0};
-    CHECK(core->read(a,"/etc/fstab",0,fstab_data,sizeof(fstab)-1)==IFS_FS_OK);
+    char fstab_data[665]={0};
+    CHECK(core->read(a,"/etc/fstab",0,fstab_data,sizeof(fstab_data))==IFS_FS_OK);
     CHECK(memcmp(fstab_data,fstab,sizeof(fstab)-1)==0);
+    for(unsigned j=sizeof(fstab)-1;j<sizeof(fstab_data);++j)
+        CHECK(fstab_data[j]=='#');
     uint32_t etc_entries=0, fstab_entries=0;
     for(uint32_t n=0;n<500;++n) {
         entry.structure_bytes=sizeof(entry);
