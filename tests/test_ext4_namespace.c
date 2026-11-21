@@ -12,11 +12,17 @@
 #include <sys/stat.h>
 #include <unistd.h>
 extern const IfsFsModuleApiV2 *infiltrator_filesystem_api_v2(void);
-typedef struct {int fd;uint32_t sector;uint64_t bytes;} Image;
+typedef struct {
+    int fd;
+    uint32_t sector;
+    uint64_t bytes;
+    int fail_reads;
+} Image;
 static int read_at(void *context,uint64_t offset,void *output,uint32_t bytes)
 {
     Image *i=context;
-    if (!i || (offset%i->sector) || (bytes%i->sector) || bytes>4096 ||
+    if (!i || i->fail_reads || (offset%i->sector) ||
+        (bytes%i->sector) || bytes>4096 ||
         offset>i->bytes || bytes>i->bytes-offset) return -1;
     uint32_t done=0;
     while(done<bytes) {
@@ -68,6 +74,15 @@ int main(int argc,char **argv)
     }
     IfsFsHostRuntimeV2 first=host(&images[0]), second=host(&images[1]);
     uint32_t variant=0;
+    /* The real V2 probe and mount must preserve host errors instead of
+     * turning a missing media read into a filesystem signature failure. */
+    images[0].fail_reads=1;
+    CHECK(core->probe(&first,&variant)==IFS_FS_IO_ERROR);
+    IfsFsVolumeInfoV2 failed_info={.structure_bytes=sizeof(failed_info)};
+    void *failed_volume=NULL;
+    CHECK(core->mount(&first,&failed_volume,&failed_info)==IFS_FS_IO_ERROR &&
+          failed_volume==NULL);
+    images[0].fail_reads=0;
     CHECK(core->probe(&first,&variant)==IFS_FS_OK && variant==4);
     CHECK(core->probe(&second,&variant)==IFS_FS_OK && variant==4);
     IfsFsVolumeInfoV2 info={.structure_bytes=sizeof(info)};
@@ -90,6 +105,38 @@ int main(int argc,char **argv)
         for(unsigned i=0;i<2;++i) close(images[i].fd);
         return 0;
     }
+    CHECK(core->stat(a,"/hello.txt",&entry)==IFS_FS_OK);
+    /* A valid path with insufficient name space must return NO_SPACE and
+     * leave the previously returned Common V2 entry fields unchanged. */
+    {
+        char insufficient[2]={0};
+        IfsFsEntryV2 short_entry={
+            .structure_bytes=sizeof(short_entry),
+            .name=insufficient,
+            .name_capacity=sizeof(insufficient),
+            .type=0xabcdef01u,
+            .size_bytes=UINT64_C(0x12345678),
+            .name_bytes=777u
+        };
+        CHECK(core->stat(a,"/hello.txt",&short_entry)==IFS_FS_NO_SPACE);
+        CHECK(short_entry.type==0xabcdef01u &&
+              short_entry.size_bytes==UINT64_C(0x12345678) &&
+              short_entry.name_bytes==777u);
+        CHECK(core->directory_entry(b,"/etc",0,&short_entry)==IFS_FS_NO_SPACE);
+        CHECK(short_entry.type==0xabcdef01u);
+        short_entry.name_capacity=0u;
+        CHECK(core->stat(a,"/hello.txt",&short_entry)==IFS_FS_NO_SPACE);
+        short_entry.name_capacity=sizeof(insufficient);
+        short_entry.structure_bytes=sizeof(short_entry)-1u;
+        CHECK(core->stat(a,"/hello.txt",&short_entry)==IFS_FS_INVALID);
+    }
+    /* Once mounted, actual failing block reads must be propagated, never
+     * misclassified as missing paths or corrupted directory entries. */
+    images[0].fail_reads=1;
+    CHECK(core->stat(a,"/hello.txt",&entry)==IFS_FS_IO_ERROR);
+    char failed_data[4]={0};
+    CHECK(core->read(a,"/hello.txt",0u,failed_data,1u)==IFS_FS_IO_ERROR);
+    images[0].fail_reads=0;
     CHECK(core->stat(a,"/hello.txt",&entry)==IFS_FS_OK);
     IfsFsMetadataV2 mode = { .structure_bytes = sizeof(mode) };
     CHECK(metadata->get(a, "/hello.txt", &mode) == IFS_FS_OK);
@@ -145,6 +192,14 @@ int main(int argc,char **argv)
     uint32_t label_len=0;
     CHECK(volume->label(b,label,sizeof(label),&label_len)==IFS_FS_OK);
     CHECK(strcmp(label,"EXT4ROOT")==0 && label_len==8);
+    {
+        char small_label[8]={0};
+        uint32_t needed=0u;
+        CHECK(volume->label(b,small_label,sizeof(small_label),&needed)==
+              IFS_FS_NO_SPACE);
+        CHECK(volume->label(b,small_label,0u,&needed)==IFS_FS_NO_SPACE);
+        CHECK(volume->label(b,NULL,16u,&needed)==IFS_FS_INVALID);
+    }
     info.structure_bytes=sizeof(info);
     CHECK(volume->query(a,&info)==IFS_FS_OK && info.block_bytes==4096);
     CHECK(core->unmount(a)==IFS_FS_OK);

@@ -487,9 +487,13 @@ static int resolve(const Volume *v, const char *path, Inode *current, Dirent *le
 
 static int entry_info(const Inode *inode, const Dirent *name, IfsFsEntryV2 *entry)
 {
-    if (!entry || entry->structure_bytes < sizeof(*entry) ||
-        !entry->name || entry->name_capacity <= name->length)
+    if (!entry || entry->structure_bytes < sizeof(*entry) || !entry->name)
         return IFS_FS_INVALID;
+    /* This is a valid existing entry: an undersized caller buffer is a
+     * capacity error, not a malformed API argument or missing on-disk data.
+     * Never partially populate a Common V2 entry on NO_SPACE. */
+    if (entry->name_capacity <= name->length)
+        return IFS_FS_NO_SPACE;
     switch (inode->type) {
     case FILE_REGULAR: entry->type = IFS_FS_ENTRY_FILE; break;
     case FILE_DIRECTORY: entry->type = IFS_FS_ENTRY_DIRECTORY; break;
@@ -648,7 +652,7 @@ static int label(void *handle, char *out, uint32_t capacity, uint32_t *bytes)
     if (!v || !out || !bytes) return IFS_FS_INVALID;
     uint32_t length = 0;
     while (v->label[length]) ++length;
-    if (capacity <= length) return IFS_FS_INVALID;
+    if (capacity <= length) return IFS_FS_NO_SPACE;
     for (uint32_t i = 0; i <= length; ++i)
         out[i] = v->label[i];
     *bytes = length;
