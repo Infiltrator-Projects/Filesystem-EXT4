@@ -73,3 +73,28 @@ if [[ -n "$firmware" ]]; then
 fi
 bad_after=$(sha256sum "$bad" | cut -d' ' -f1)
 test "$bad_before" = "$bad_after"
+
+# Ensure upgraded EXT4 media with valid non-extent inodes actually boots:
+# filesystem-wide EXTENTS does not mean every inode uses an extent tree.
+# A disposable native block-mapped file crosses direct/single/double levels.
+mkdir -p "$work/oldtree"
+dd if=/dev/urandom of="$work/oldtree/payload.bin" bs=1M count=8 status=none
+ln -s /././././././././././././././././././././././././././././././payload.bin \
+    "$work/oldtree/long-alias.bin"
+truncate -s 64M "$work/legacy.img"
+features=has_journal,ext_attr,resize_inode,dir_index,filetype,64bit,flex_bg
+features+=,sparse_super,large_file,huge_file,dir_nlink,extra_isize,metadata_csum
+mkfs.ext4 -q -F -b 4096 -O "none,$features" \
+    -L LEGACYEXT4 -d "$work/oldtree" "$work/legacy.img"
+# An EXT3-to-EXT4 style upgrade advertises extents for new files but does
+# not silently rewrite the old inode pointers into extent records.
+tune2fs -O extent "$work/legacy.img" >/dev/null
+debugfs -R 'stat /payload.bin' "$work/legacy.img" 2>/dev/null |
+    grep -Fq 'BLOCKS:'
+old_hash=$(sha256sum "$work/legacy.img" | cut -d' ' -f1)
+"$program" "$work/legacy.img" --legacy-blockmap "$work/oldtree/payload.bin"
+if [[ -n "$firmware" ]]; then
+    EXT4_TEST_MODULE="$firmware" "$program" "$work/legacy.img" \
+        --legacy-blockmap "$work/oldtree/payload.bin"
+fi
+test "$old_hash" = "$(sha256sum "$work/legacy.img" | cut -d' ' -f1)"

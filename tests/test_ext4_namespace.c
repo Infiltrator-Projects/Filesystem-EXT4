@@ -54,8 +54,10 @@ static IfsFsHostRuntimeV2 host(Image *image)
 }
 int main(int argc,char **argv)
 {
-    CHECK(argc==2 || (argc==3 && strcmp(argv[2],"--corrupt-htree")==0));
+    CHECK(argc==2 || (argc==3 && strcmp(argv[2],"--corrupt-htree")==0) ||
+          (argc==4 && strcmp(argv[2],"--legacy-blockmap")==0));
     const int corrupt_htree=argc==3;
+    const int legacy=argc==4;
     const IfsFsModuleApiV2 *api=infiltrator_filesystem_api_v2();
     /* This exact test also loads the no-import freestanding reader, using
      * the same Common V2 host callbacks and real on-disk fixtures. */
@@ -115,6 +117,37 @@ int main(int argc,char **argv)
     char name[256]={0};
     IfsFsEntryV2 entry={.structure_bytes=sizeof(entry),
                         .name=name,.name_capacity=sizeof(name)};
+    if(legacy) {
+        /* A real EXT4 volume can have extents in its superblock but keep
+         * older direct/indirect inodes. Compare bytes from the image's
+         * block-mapped inode to the original file at the boundaries of
+         * direct, single-indirect and double-indirect mapping. */
+        struct stat original;
+        CHECK(stat(argv[3],&original)==0 && original.st_size>8200000);
+        CHECK(core->stat(a,"/payload.bin",&entry)==IFS_FS_OK);
+        CHECK(entry.size_bytes==(uint64_t)original.st_size);
+        int fd=open(argv[3],O_RDONLY);
+        CHECK(fd>=0);
+        const uint64_t offsets[]={0u,45056u,49152u,65536u,
+                                  4194304u,8192000u};
+        for(unsigned k=0;k<sizeof(offsets)/sizeof(offsets[0]);++k) {
+            uint8_t expected[4096],actual[4096];
+            CHECK(pread(fd,expected,sizeof(expected),
+                        (off_t)offsets[k])==(ssize_t)sizeof(expected));
+            CHECK(core->read(a,"/payload.bin",offsets[k],actual,
+                             sizeof(actual))==IFS_FS_OK);
+            CHECK(memcmp(actual,expected,sizeof(actual))==0);
+            CHECK(core->read(b,"/long-alias.bin",offsets[k],actual,
+                             sizeof(actual))==IFS_FS_OK);
+            CHECK(memcmp(actual,expected,sizeof(actual))==0);
+        }
+        close(fd);
+        CHECK(core->unmount(a)==IFS_FS_OK);
+        CHECK(core->unmount(b)==IFS_FS_OK);
+        for(unsigned i=0;i<2;++i)close(images[i].fd);
+        if(firmware_library)CHECK(dlclose(firmware_library)==0);
+        return 0;
+    }
     if(corrupt_htree) {
         /* Checksummed HTree metadata is inspected by path traversal, not
          * at mount time. Independent clean files must remain readable. */
