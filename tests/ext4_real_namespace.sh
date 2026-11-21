@@ -3,6 +3,11 @@
 # Only a disposable regular file is formatted and read; never touch disks.
 set -euo pipefail
 program=${1:?path to test executable}
+firmware=${2:-}
+if [[ -n "$firmware" ]]; then
+    firmware=$(realpath "$firmware")
+    test -s "$firmware"
+fi
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
 mkdir -p "$work/tree/sub" "$work/tree/etc"
@@ -36,6 +41,12 @@ grep -Fq 'Root node dump:' <<< "$tree"
 grep -Fq 'Number of entries (count): 2' <<< "$tree"
 before=$(sha256sum "$work/disk.img" | cut -d' ' -f1)
 "$program" "$work/disk.img"
+# Execute the actual no-import firmware profile through its exported
+# Common V2 entry point against the same independently formatted image.
+# This is NOT a substitute for BOOT validator and OVMF qualification.
+if [[ -n "$firmware" ]]; then
+    EXT4_TEST_MODULE="$firmware" "$program" "$work/disk.img"
+fi
 after=$(sha256sum "$work/disk.img" | cut -d' ' -f1)
 test "$before" = "$after"
 
@@ -56,3 +67,6 @@ old=$(dd if="$bad" bs=1 skip="$checksum_byte" count=1 status=none | od -An -tu1)
 printf -v replacement '%03o' $((old ^ 1))
 printf '%b' "\\$replacement" | dd of="$bad" bs=1 seek="$checksum_byte" count=1 conv=notrunc status=none
 "$program" "$bad" --corrupt-htree
+if [[ -n "$firmware" ]]; then
+    EXT4_TEST_MODULE="$firmware" "$program" "$bad" --corrupt-htree
+fi

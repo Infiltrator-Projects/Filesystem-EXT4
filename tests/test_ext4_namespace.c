@@ -5,6 +5,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include <infiltratr/filesystem_module_v2.h>
 #include <fcntl.h>
+#include <dlfcn.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -56,6 +57,26 @@ int main(int argc,char **argv)
     CHECK(argc==2 || (argc==3 && strcmp(argv[2],"--corrupt-htree")==0));
     const int corrupt_htree=argc==3;
     const IfsFsModuleApiV2 *api=infiltrator_filesystem_api_v2();
+    /* This exact test also loads the no-import freestanding reader, using
+     * the same Common V2 host callbacks and real on-disk fixtures. */
+    const char *firmware=getenv("EXT4_TEST_MODULE");
+    void *firmware_library=NULL;
+    if(firmware && firmware[0]) {
+        firmware_library=dlopen(firmware,RTLD_NOW|RTLD_LOCAL);
+        if(!firmware_library)
+            fprintf(stderr,"EXT4 freestanding dlopen: %s\n",dlerror());
+        CHECK(firmware_library!=NULL);
+        void *symbol=dlsym(firmware_library,IFS_FS_COMMON_EXPORT_V2);
+        IfsFsModuleApiEntryV2 get_api=NULL;
+        CHECK(symbol && sizeof(symbol)==sizeof(get_api));
+        memcpy(&get_api,&symbol,sizeof(get_api));
+        CHECK(get_api!=NULL);
+        api=get_api();
+        CHECK(api && api->runtime_profiles==
+              (IFS_FS_PROFILE_FREESTANDING|IFS_FS_PROFILE_FIRMWARE));
+    } else {
+        CHECK(api->runtime_profiles==IFS_FS_PROFILE_HOSTED);
+    }
     CHECK(ifs_fs_api_v2_valid(api,"ext4"));
     const IfsFsCoreOpsV2 *core=(const void *)ifs_fs_group_v2(api,IFS_FS_GROUP_CORE);
     const IfsFsVolumeOpsV2 *volume=(const void *)ifs_fs_group_v2(api,IFS_FS_GROUP_VOLUME);
@@ -103,6 +124,7 @@ int main(int argc,char **argv)
         CHECK(core->unmount(a)==IFS_FS_OK);
         CHECK(core->unmount(b)==IFS_FS_OK);
         for(unsigned i=0;i<2;++i) close(images[i].fd);
+        if(firmware_library)CHECK(dlclose(firmware_library)==0);
         return 0;
     }
     CHECK(core->stat(a,"/hello.txt",&entry)==IFS_FS_OK);
@@ -212,5 +234,6 @@ int main(int argc,char **argv)
     CHECK(core->unmount(b)==IFS_FS_OK);
     CHECK(core->unmount(c)==IFS_FS_OK);
     for(unsigned i=0;i<2;++i)close(images[i].fd);
+    if(firmware_library)CHECK(dlclose(firmware_library)==0);
     return 0;
 }

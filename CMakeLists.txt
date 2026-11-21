@@ -99,12 +99,15 @@ foreach(kind IN ITEMS ext4)
   target_include_directories(ext4-v2-namespace-test PRIVATE
     "${infiltratr_common_SOURCE_DIR}/include")
   target_link_libraries(ext4-v2-namespace-test PRIVATE
-    ext-${kind}-driver InfiltratrCommon::Common)
+    ext-${kind}-driver InfiltratrCommon::Common ${CMAKE_DL_LIBS})
   target_compile_options(ext4-v2-namespace-test PRIVATE
     -Wall -Wextra -Wpedantic -Werror)
   add_test(NAME ext4-v2-real-namespace
     COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/tests/ext4_real_namespace.sh"
-            "$<TARGET_FILE:ext4-v2-namespace-test>")
+            "$<TARGET_FILE:ext4-v2-namespace-test>" "${EXT4_FIRMWARE_ELF}")
+  add_test(NAME ext4-source-identical-boot-elf
+    COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_firmware_v2.sh"
+            "$<TARGET_FILE:ext-${kind}-driver>" "${EXT4_FIRMWARE_ELF}")
   add_test(NAME ext4-v2-only-dynamic-export
     COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_v2_exports.sh" "$<TARGET_FILE:ext-${kind}-driver>")
  endif()
