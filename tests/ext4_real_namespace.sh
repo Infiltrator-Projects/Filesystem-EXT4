@@ -82,7 +82,9 @@ dd if=/dev/urandom of="$work/oldtree/payload.bin" bs=1M count=8 status=none
 ln -s /././././././././././././././././././././././././././././././payload.bin \
     "$work/oldtree/long-alias.bin"
 truncate -s 64M "$work/legacy.img"
-features=has_journal,ext_attr,resize_inode,dir_index,filetype,64bit,flex_bg
+# mke2fs requires extents for 64-bit media. Create an authentic classic
+# 32-bit mapped inode first, then upgrade the superblock feature bit.
+features=has_journal,ext_attr,resize_inode,dir_index,filetype,flex_bg
 features+=,sparse_super,large_file,huge_file,dir_nlink,extra_isize,metadata_csum
 mkfs.ext4 -q -F -b 4096 -O "none,$features" \
     -L LEGACYEXT4 -d "$work/oldtree" "$work/legacy.img"
