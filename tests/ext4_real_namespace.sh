@@ -66,7 +66,10 @@ old=$(dd if="$bad" bs=1 skip="$checksum_byte" count=1 status=none | od -An -tu1)
 [[ "$old" =~ ^[[:space:]]*[0-9]+[[:space:]]*$ ]] || exit 1
 printf -v replacement '%03o' $((old ^ 1))
 printf '%b' "\\$replacement" | dd of="$bad" bs=1 seek="$checksum_byte" count=1 conv=notrunc status=none
+bad_before=$(sha256sum "$bad" | cut -d' ' -f1)
 "$program" "$bad" --corrupt-htree
 if [[ -n "$firmware" ]]; then
     EXT4_TEST_MODULE="$firmware" "$program" "$bad" --corrupt-htree
 fi
+bad_after=$(sha256sum "$bad" | cut -d' ' -f1)
+test "$bad_before" = "$bad_after"

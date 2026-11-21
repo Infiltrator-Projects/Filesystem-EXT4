@@ -84,3 +84,41 @@ a three-block indexed directory with two HTree leaves and a 665-byte fstab,
 matching the observed Zabbix directory shape. CI guards both correctness
 and image nonmutation. A passing virtual case is not a substitute for
 testing the actual Zabbix disk and signed firmware path.
+
+## 21 November 2026: Common V2 reader and qualification repairs (unreleased)
+
+Changes are directly committed to `main` with no BOOT repository or physical
+ESP/NVRAM change:
+
+- `b75739d0`: `CORE.STAT`, `CORE.LIST` and `VOLUME.LABEL_GET` now
+  return `IFS_FS_NO_SPACE` for valid entries whose output buffer is too small,
+  rather than incorrectly returning `IFS_FS_INVALID`. A real-media
+  Common V2 regression checks no partial entry writes and exact I/O error
+  propagation from both probe/mount and reads after mounting.
+- `0d01cdfe`: The actual no-import freestanding firmware ELF is loaded
+  through its exported Common V2 API on the test host and exercised on the
+  independently formatted real EXT4 image, HTree index, 4Kn transport and
+  deliberately corrupted checksum fixture. The hosted .so carries an
+  identical `.infiltrator_boot` ELF, compared byte-for-byte; no other
+  filesystem driver substitutes for it. This is NOT proof of UEFI execution.
+- `99fb2265`: The previously pinned BOOT 0.1.46 release download returned
+  HTTP 404, and the release workflow's BOOT source commit was unreachable.
+  Both obsolete dependencies were removed. The firmware and package
+  workflows now download a real published BOOT DEB plus SHA256SUMS, verify
+  exact package bytes, require its executable production `validate-module`
+  and its x64 EFI image, and would exercise **the exact packaged EXT4.so**
+  in disposable OVMF only after those gates pass.
+- The corruption-image regression checks that neither the hosted nor the
+  freestanding reader modifies the deliberately malformed source image.
+  Release CI triggers only from main or manual dispatch, not pull requests.
+
+**Current external blocker:** the latest verified BOOT release `v0.1.119`
+stages a preview EFI binary but does **not** contain the Common V2 production
+`validate-module` executable. EXT4's firmware workflow explicitly failed
+at that gate on 21 November 2026, rather than misclassifying a V2 ELF compile
+as successful BOOT validation. BOOT's current source README also states
+that Common V2 module loading is not yet complete. Firmware validation,
+real OVMF kernel/initramfs handoff, and native package release therefore
+remain **unqualified**. The already-published `v1.0.16` remains unchanged.
+No V1 or .ko runtime fallback has been introduced, and there has been
+no weakening of a module signature, checksum or feature check.
