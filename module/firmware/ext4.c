@@ -212,16 +212,65 @@ static int read_inode(const Volume *v, uint32_t number, Inode *inode)
     return IFS_FS_OK;
 }
 
-/* The inode stores the root extent node. Children occupy whole blocks.
- * A sparse or unwritten logical block maps to physical block zero. */
+/* EXT4 may retain older block-mapped inodes even when the volume supports
+ * extents (for example files preserved during an EXT3-to-EXT4 upgrade).
+ * Read the 12 direct pointers and single/double/triple indirect trees from
+ * their native i_block encoding. BOOT cannot assume every file is extents-
+ * mapped just because s_feature_incompat advertises EXTENTS.
+ *
+ * Each child is a 32-bit physical block number. Never follow out-of-volume
+ * pointers. A zero pointer is a sparse hole, which read_data zero-fills. */
+static int indirect_block(const Volume *v, const Inode *inode,
+                          uint32_t logical, uint64_t *physical)
+{
+    const uint32_t block_bytes = v->info.block_bytes;
+    const uint32_t per_block = block_bytes / 4u;
+    uint32_t path[4] = {0};
+    uint32_t ignored_boundary;
+    uint32_t bits = 0;
+    while ((1u << bits) < per_block)
+        ++bits;
+    const int depth = ifs_ext4_indirect_block_path(
+        logical, per_block, bits, path, &ignored_boundary);
+    if (depth < 1 || depth > 4)
+        return IFS_FS_UNSUPPORTED;
+    if (path[0] >= sizeof(inode->map) / 4u)
+        return IFS_FS_CORRUPT;
+
+    uint32_t block = u32(inode->map + 4u * path[0]);
+    for (int level = 1; level < depth; ++level) {
+        if (!block) {
+            *physical = 0;
+            return IFS_FS_OK;
+        }
+        if ((uint64_t)block >= v->blocks || path[level] >= per_block)
+            return IFS_FS_CORRUPT;
+        uint8_t pointer[4];
+        uint64_t at = (uint64_t)block * block_bytes +
+                      (uint64_t)path[level] * sizeof(pointer);
+        const int rc = ifs_fs_host_read_bytes_v2(v->host, at, pointer,
+                                                 sizeof(pointer));
+        if (rc != IFS_FS_OK)
+            return rc;
+        block = u32(pointer);
+    }
+    if (block && (uint64_t)block >= v->blocks)
+        return IFS_FS_CORRUPT;
+    *physical = block;
+    return IFS_FS_OK;
+}
+
+/* The inode stores the root extent node when EXTENTS_FL is enabled.
+ * Children occupy whole blocks. A sparse or unwritten logical block maps to
+ * physical block zero, using the same Common V2 byte-range reader. */
 static int extent(const Volume *v, const Inode *inode, uint32_t logical, uint64_t *physical)
 {
+    if (!(inode->flags & EXTENTS_FLAG))
+        return indirect_block(v, inode, logical, physical);
     uint8_t block[MAX_BLOCK];
     const uint8_t *node = inode->map;
     uint32_t bytes = sizeof(inode->map);
     uint16_t depth = u16(node + 6);
-    if (!(inode->flags & EXTENTS_FLAG))
-        return IFS_FS_UNSUPPORTED;
     if (depth > MAX_DEPTH)
         return IFS_FS_CORRUPT;
     for (;;) {
