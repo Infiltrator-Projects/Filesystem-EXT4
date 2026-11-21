@@ -122,3 +122,19 @@ real OVMF kernel/initramfs handoff, and native package release therefore
 remain **unqualified**. The already-published `v1.0.16` remains unchanged.
 No V1 or .ko runtime fallback has been introduced, and there has been
 no weakening of a module signature, checksum or feature check.
+
+## EXT4-only release qualification (1.0.17)
+
+The native and portable EXT4 release now qualifies **only the EXT4 repository's own
+Common V2 provider**, its real-media operations, and packaged `EXT4.so`. A
+boot-manager implementation is a separate project and is never changed or
+required for an EXT4 release. The previous external-BOOT-only OVMF workflow
+was removed because it blocked a valid filesystem release on an unrelated
+component. This does **not** claim OS boot, writable filesystems, journal
+replay or other unimplemented EXT4 capabilities.
+
+Native EXT4 inode reading now supports direct, single-, double- and
+triple-indirect block maps as well as extent trees. Both profiles load actual
+files from an EXT4 image upgraded from a classic block-map format, retaining
+unchanged media bytes. Production runtime remains the independent Common V2
+`EXT4.so` shared object; no legacy .ko or V1 adapter is installed.
