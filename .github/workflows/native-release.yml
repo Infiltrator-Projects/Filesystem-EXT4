@@ -13,11 +13,6 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-        with:
-          repository: Infiltrator-Projects/Boot
-          ref: 8cea24b9764e993b9a82f2fbf383ca6409bc7dcf
-          path: .qualification/boot
       - name: Build tools and pinned Common dependencies
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential binutils cmake git pkg-config libssl-dev libsqlite3-dev dpkg-dev
       - name: Qualify portable Debian and embed exact source into native RUN
@@ -52,25 +47,30 @@ jobs:
           readelf -Ws "$RUNNER_TEMP/installed/System/Filesystems/$FS_SO" | grep -F "$FS_ABI"
       - name: Boot Linux through the exact packaged portable and native EXT4.so
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           sudo apt-get install -y --no-install-recommends \
-            gnu-efi cpio busybox-static e2fsprogs dosfstools gdisk mtools qemu-system-x86 ovmf
-          boot="$PWD/.qualification/boot"
-          bash "$boot/scripts/build-gnuefi.sh"
+            cpio busybox-static e2fsprogs dosfstools gdisk mtools qemu-system-x86 ovmf
           work="$RUNNER_TEMP/ext4-package-boot"
           mkdir -p "$work"
+          bash tests/fetch-production-boot.sh "$work/boot"
+          validator=$(cat "$work/boot/validator.path")
+          boot_efi=$(cat "$work/boot/efi.path")
           image=$(apt-cache depends linux-image-generic | awk '/Depends: linux-image-[0-9]/ { image=$2 } END { print image }')
           test -n "$image"
           (cd "$work" && apt-get download "linux-image-unsigned-${image#linux-image-}")
           dpkg-deb -x "$work"/linux-image-unsigned-*.deb "$work/kernel"
           kernel="$work/kernel/boot/vmlinuz-${image#linux-image-}"
           dpkg-deb -x dist/*.deb "$work/portable"
-          bash tests/firmware-ext4.sh "$boot/refind/refind_x64.efi" \
+          "$validator" "$work/portable/System/Filesystems/EXT4.so"
+          "$validator" "$RUNNER_TEMP/installed/System/Filesystems/EXT4.so"
+          bash tests/firmware-ext4.sh "$boot_efi" \
             "$work/portable/System/Filesystems/EXT4.so" "$kernel" "$work/portable-vm"
-          bash tests/firmware-ext4.sh "$boot/refind/refind_x64.efi" \
+          bash tests/firmware-ext4.sh "$boot_efi" \
             "$RUNNER_TEMP/installed/System/Filesystems/EXT4.so" "$kernel" "$work/native-vm"
-          bash tests/firmware-ext4.sh "$boot/refind/refind_x64.efi" \
+          bash tests/firmware-ext4.sh "$boot_efi" \
             "$RUNNER_TEMP/installed/System/Filesystems/EXT4.so" "$kernel" "$work/recovery-vm" needs-recovery
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()

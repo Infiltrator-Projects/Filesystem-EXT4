@@ -21,17 +21,20 @@ jobs:
           ref: 4c92c8dcd7e03afd4bab3105e143dbabd72c8adc
           path: common
       - name: Build a V2-only firmware module and boot it in OVMF
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential cmake cpio busybox-static e2fsprogs dosfstools gdisk mtools qemu-system-x86 ovmf
+            build-essential cmake cpio busybox-static e2fsprogs dosfstools gdisk mtools qemu-system-x86 ovmf gh
           work="$RUNNER_TEMP/ext4-firmware"
           mkdir -p "$work"
-          boot=infiltrator-boot_0.1.46_amd64.deb
-          curl -fsSL --retry 3 "https://github.com/Infiltrator-Projects/Boot/releases/download/v0.1.46/$boot" -o "$work/$boot"
-          printf '%s  %s\n' 9ab605a5312a54741d4a002e1131823ef7e28a73957f6473bea88a9c64d10035 "$work/$boot" | sha256sum -c -
-          dpkg-deb -x "$work/$boot" "$work/package"
+          # Reconcile current published BOOT validator and loader as ONE
+          # authenticated release. A missing ABI gate fails closed.
+          bash tests/fetch-production-boot.sh "$work/boot"
+          validator=$(cat "$work/boot/validator.path")
+          boot_efi=$(cat "$work/boot/efi.path")
           # Use a real EFI-stub kernel from the runner distribution.
           image=$(apt-cache depends linux-image-generic | awk '/Depends: linux-image-[0-9]/ { image=$2 } END { print image }')
           test -n "$image"
@@ -42,11 +45,9 @@ jobs:
           cmake -S module/firmware -B "$work/build" \
             -DCMAKE_BUILD_TYPE=Release -DCOMMON_INCLUDE_DIR="$PWD/common/include"
           cmake --build "$work/build" --parallel
-          validator="$work/package/usr/lib/infiltrator-boot/validate-module"
           "$validator" "$work/build/EXT4.so"
           bash tests/firmware-ext4.sh \
-            "$work/package/usr/lib/infiltrator-boot/EFI/BOOT/BOOTX64.EFI" \
-            "$work/build/EXT4.so" "$kernel" "$work/vm"
+            "$boot_efi" "$work/build/EXT4.so" "$kernel" "$work/vm"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
