@@ -541,7 +541,10 @@ static int entry_info(const Inode *inode, const Dirent *name, IfsFsEntryV2 *entr
     /* This is a valid existing entry: an undersized caller buffer is a
      * capacity error, not a malformed API argument or missing on-disk data.
      * Never partially populate a Common V2 entry on NO_SPACE. */
-    if (entry->name_capacity <= name->length)
+    /* The root inode has no directory-entry component. Common V2 STAT
+     * exposes it as "/", never as a zero-length filename. */
+    const uint32_t length = name->length ? name->length : 1u;
+    if (entry->name_capacity <= length)
         return IFS_FS_NO_SPACE;
     switch (inode->type) {
     case FILE_REGULAR: entry->type = IFS_FS_ENTRY_FILE; break;
@@ -553,9 +556,14 @@ static int entry_info(const Inode *inode, const Dirent *name, IfsFsEntryV2 *entr
      * byte size. Returning zero hid multi-block/Htree layout from callers. */
     entry->size_bytes = inode->bytes;
     entry->attributes = 0;
-    entry->name_bytes = name->length;
-    for (uint32_t i = 0; i <= name->length; ++i)
-        entry->name[i] = name->name[i];
+    entry->name_bytes = length;
+    if (!name->length) {
+        entry->name[0] = '/';
+        entry->name[1] = 0;
+    } else {
+        for (uint32_t i = 0; i <= name->length; ++i)
+            entry->name[i] = name->name[i];
+    }
     return IFS_FS_OK;
 }
 

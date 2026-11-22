@@ -117,6 +117,17 @@ int main(int argc,char **argv)
     char name[256]={0};
     IfsFsEntryV2 entry={.structure_bytes=sizeof(entry),
                         .name=name,.name_capacity=sizeof(name)};
+    CHECK(core->stat(a,"/",&entry)==IFS_FS_OK &&
+          entry.type==IFS_FS_ENTRY_DIRECTORY &&
+          entry.name_bytes==1u && strcmp(name,"/")==0);
+    {
+        char narrow[1]={'X'};
+        IfsFsEntryV2 short_root={.structure_bytes=sizeof(short_root),
+                                 .name=narrow,.name_capacity=sizeof(narrow),
+                                 .name_bytes=77u};
+        CHECK(core->stat(a,"/",&short_root)==IFS_FS_NO_SPACE &&
+              narrow[0]=='X' && short_root.name_bytes==77u);
+    }
     if(legacy) {
         /* A real EXT4 volume can have extents in its superblock but keep
          * older direct/indirect inodes. Compare bytes from the image's
