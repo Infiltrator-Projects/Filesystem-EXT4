@@ -66,11 +66,15 @@ foreach(kind IN ITEMS ext4)
  add_library(ext-${kind}-driver SHARED
   native/filesystems/ext4/core/ext4_core.c
   module/firmware/ext4.c)
- set_target_properties(ext-${kind}-driver PROPERTIES PREFIX "" OUTPUT_NAME "${module_name}" SUFFIX ".so")
+ set_target_properties(ext-${kind}-driver PROPERTIES PREFIX "" OUTPUT_NAME "${module_name}" SUFFIX ".so"
+  C_VISIBILITY_PRESET hidden)
  target_compile_definitions(ext-${kind}-driver PRIVATE
   _GNU_SOURCE _FILE_OFFSET_BITS=64 IFS_EXT4_HOSTED_BUILD=1 IFS_EXT_FORMAT_ID="${kind}")
  target_compile_options(ext-${kind}-driver PRIVATE -Wall -Wextra -Wpedantic -Werror)
- target_link_options(ext-${kind}-driver PRIVATE -Wl,-z,defs)
+ target_link_options(ext-${kind}-driver PRIVATE -Wl,-z,defs
+  "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/module/v2-only.map")
+ set_property(TARGET ext-${kind}-driver APPEND PROPERTY LINK_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/module/v2-only.map")
  target_include_directories(ext-${kind}-driver PRIVATE
   "${EXT_SRC}" "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/include" "${CMAKE_CURRENT_SOURCE_DIR}/compat"
   "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_BINARY_DIR}"
