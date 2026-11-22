@@ -76,4 +76,4 @@ jobs:
           fi
           gh release create "$tag" dist/*.deb dist/*.run --target "$GITHUB_SHA" \
             --title "Independent filesystem native and portable installers $version" \
-            --notes "EXT4 1.0.17: Common V2 EXT4 filesystem reader with extent and direct/indirect inode mapping. Portable DEB installs EXT4.so and its manual; native RUN builds and installs EXT4.so and its manual. This release does not alter or install a boot manager."
+            --notes "EXT4 $version: Common V2 read-only filesystem reader with extent and direct/indirect inode mapping, canonical root-directory STAT and safe output bounds. Portable DEB and native RUN install the source-owned EXT4.so and manual. This release does not alter or install a boot manager."
