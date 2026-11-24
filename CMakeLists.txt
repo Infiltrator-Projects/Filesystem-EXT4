@@ -114,6 +114,11 @@ foreach(kind IN ITEMS ext4)
             "$<TARGET_FILE:ext-${kind}-driver>" "${EXT4_FIRMWARE_ELF}")
   add_test(NAME ext4-v2-only-dynamic-export
     COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_v2_exports.sh" "$<TARGET_FILE:ext-${kind}-driver>")
+  # Keep real-media and historical regressions in CI; only the production
+  # descriptor, in-memory probe and ELF contract train/check native installs.
+  set_tests_properties(ext-${kind}-module-contract ext4-common-v2-probe
+    ext4-source-identical-boot-elf ext4-v2-only-dynamic-export
+    PROPERTIES LABELS "install-smoke" TIMEOUT 30)
  endif()
  # EXT4 owns only this format's module and documentation.
  if(kind STREQUAL "ext4")

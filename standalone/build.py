@@ -99,7 +99,7 @@ def inspect(module):
     dependencies(module)
 
 def test(module, workspace=None):
-    # CTest / make test are run for every pass by build(); this rechecks the installed bytes.
+    # Build qualification is profile-specific; recheck the packaged bytes here.
     inspect(module)
 
 def build(profile, module):
@@ -130,6 +130,10 @@ def build(profile, module):
                      "-fprofile-use=" + str(pg) + " -fprofile-correction -Wno-missing-profile",
                      "test"])
         else:
+            # Train production code with the bounded in-memory V2 probe.
+            # Full media qualification remains in CI and portable builds.
+            smoke = ["ctest", "--test-dir", dest, "--output-on-failure",
+                     "--no-tests=error", "-L", "^install-smoke$", "--timeout", "30"]
             extra = (["-DIFS_EXT_BUILD_LEGACY_MULTIFORMAT_TEST_MODULES=ON"]
                      if ENGINE else [])
             def configure(cflags, ldflags=""):
@@ -149,12 +153,12 @@ def build(profile, module):
                 use = "-fprofile-use=" + str(pg) + " -fprofile-correction -Wno-missing-profile"
                 configure(base + " " + gen, gen)
                 run(["cmake", "--build", dest, "--parallel", "2"])
-                run(["ctest", "--test-dir", dest, "--output-on-failure"])
+                run(smoke)
                 if not any(p.is_file() and p.stat().st_size for p in pg.rglob("*.gcda")):
                     raise RuntimeError("No measured PGO data for native filesystem")
                 configure(base + " " + use, "-fprofile-use=" + str(pg))
                 run(["cmake", "--build", dest, "--clean-first", "--parallel", "2"])
-                run(["ctest", "--test-dir", dest, "--output-on-failure"])
+                run(smoke)
         inspect(dest / NAME)
         shutil.copyfile(dest / NAME, module)
         inspect(module)
