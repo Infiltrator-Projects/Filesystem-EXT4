@@ -1,6 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Bounded EXT4 boot reader using only Common V2 host services. */
 #include <stdbool.h>
+#if defined(IFS_EXT4_HOSTED_BUILD)
+#include <string.h>
+#endif
 #include <infiltratr/filesystem_module_v2.h>
 #include "../../native/filesystems/ext4/core/ext4_core.h"
 
@@ -752,10 +755,216 @@ static const IfsFsMetadataOpsV2 metadata_ops = {
     .get = metadata_get
 };
 
+#if defined(IFS_EXT4_HOSTED_BUILD)
+/* Native EXT4 empty-volume formatting. The filesystem owns every on-disk
+ * record; the caller provides only the exclusive, durable Common V2 lease.
+ * This initial profile uses 4 KiB blocks, 256-byte inodes and complete
+ * superblock/descriptor backups, extents and a clean internal JBD2 journal.
+ * No pathname, external formatter or kernel mount is used. */
+enum { FMT_BLOCK=4096u, FMT_BPG=32768u, FMT_IPG=1024u,
+       FMT_INODE_BYTES=256u, FMT_ITABLE=64u, FMT_META=68u, FMT_JOURNAL=1024u,
+       FMT_JIND=FMT_META+1u, FMT_JSTART=FMT_META+2u };
+static void fmt16(uint8_t *p,uint32_t x)
+{ p[0]=(uint8_t)x;p[1]=(uint8_t)(x>>8); }
+static void fmt32(uint8_t *p,uint32_t x)
+{ fmt16(p,x);fmt16(p+2,x>>16); }
+static void fmtbe32(uint8_t *p,uint32_t x)
+{ p[0]=(uint8_t)(x>>24);p[1]=(uint8_t)(x>>16);p[2]=(uint8_t)(x>>8);p[3]=(uint8_t)x; }
+static int fmt_write(const IfsFsHostRuntimeV2 *h,uint64_t at,
+                     const void *data,uint32_t n)
+{
+    if(h->cancelled && h->cancelled(h->context))return IFS_FS_BUSY;
+    return ifs_fs_host_write_bytes_v2(h,at,data,n);
+}
+static void fmt_bit(uint8_t *bitmap,uint32_t bit)
+{ bitmap[bit/8u]|=(uint8_t)(1u<<(bit%8u)); }
+static int format_ext4(const IfsFsHostRuntimeV2 *h,uint32_t variant,
+                        const char *label,uint32_t flags)
+{
+    if(!ifs_fs_host_v2_valid(h))return IFS_FS_INVALID;
+    if((h->capabilities&IFS_FS_HOST_READ_ONLY) ||
+       !(h->capabilities&IFS_FS_HOST_EXCLUSIVE) ||
+       !(h->capabilities&IFS_FS_HOST_DURABLE))return IFS_FS_ACCESS;
+    /* Without stable device identities, conservatively require all local
+     * sessions closed before modifying any volume. */
+    for(size_t i=0;i<MAX_MOUNTS;++i)
+        if(mounts[i].cookie)return IFS_FS_BUSY;
+    if(variant!=4u || flags || h->logical_sector_bytes>FMT_BLOCK ||
+       h->volume_bytes%FMT_BLOCK)return IFS_FS_UNSUPPORTED;
+    const uint64_t count=h->volume_bytes/FMT_BLOCK;
+    /* A one-block group descriptor table holds up to 128 entries.
+     * Refuse a short final group instead of rounding off its capacity. */
+    if(count<4096u || count>128ull*FMT_BPG)return IFS_FS_UNSUPPORTED;
+    const uint32_t blocks=(uint32_t)count;
+    const uint32_t groups=(blocks+FMT_BPG-1u)/FMT_BPG;
+    const uint32_t tail=blocks-(groups-1u)*FMT_BPG;
+    if(tail<=FMT_META+1u)return IFS_FS_UNSUPPORTED;
+    const size_t label_bytes=label?strlen(label):0u;
+    if(label_bytes>16u)return IFS_FS_INVALID;
+
+    uint8_t uuid[16]={0};
+    if(h->structure_bytes>=sizeof(*h) && h->random_bytes) {
+        if(ifs_fs_host_random_bytes_v2(h,uuid,sizeof(uuid))!=IFS_FS_OK)
+            return IFS_FS_IO_ERROR;
+        uuid[6]=(uint8_t)((uuid[6]&15u)|64u);
+        uuid[8]=(uint8_t)((uuid[8]&63u)|128u);
+    }
+    uint32_t now=0u;
+    if(h->realtime_ns) {
+        const uint64_t seconds=h->realtime_ns(h->context)/1000000000ull;
+        if(seconds<=UINT32_MAX)now=(uint32_t)seconds;
+    }
+
+    uint8_t block[FMT_BLOCK]={0},desc[FMT_BLOCK]={0},sb[1024]={0};
+    uint32_t free_blocks=0u;
+    int rc;
+    /* Clear the primary signature first. No new valid superblock is
+     * published until all allocation metadata and root data are durable. */
+    for(uint32_t g=0u;g<groups;++g) {
+        rc=fmt_write(h,(uint64_t)g*FMT_BPG*FMT_BLOCK,block,sizeof(block));
+        if(rc!=IFS_FS_OK)return rc;
+    }
+    if(h->flush(h->context)!=0)return IFS_FS_IO_ERROR;
+
+    for(uint32_t g=0u;g<groups;++g) {
+        const uint32_t base=g*FMT_BPG;
+        const uint32_t span=g+1u==groups?tail:FMT_BPG;
+        const uint32_t used=FMT_META+(g==0u?2u+FMT_JOURNAL:0u);
+        const uint32_t available=span-used;
+        uint8_t *d=desc+g*32u;
+        fmt32(d,base+2u);fmt32(d+4,base+3u);fmt32(d+8,base+4u);
+        fmt16(d+12,available);fmt16(d+14,FMT_IPG-(g==0u?10u:0u));
+        fmt16(d+16,g==0u?1u:0u);
+        free_blocks+=available;
+        /* Mark metadata and nonexistent tail blocks allocated. */
+        memset(block,0,sizeof(block));
+        for(uint32_t bit=0u;bit<used;++bit)fmt_bit(block,bit);
+        for(uint32_t bit=span;bit<FMT_BPG;++bit)fmt_bit(block,bit);
+        rc=fmt_write(h,(uint64_t)(base+2u)*FMT_BLOCK,block,sizeof(block));
+        if(rc!=IFS_FS_OK)return rc;
+        /* Inode bits 0..9 are reserved in group zero (root is inode 2).
+         * Bits beyond the declared inode count are unavailable. */
+        memset(block,0xff,sizeof(block));
+        memset(block,0,FMT_IPG/8u);
+        if(!g){block[0]=0xffu;block[1]=3u;}
+        rc=fmt_write(h,(uint64_t)(base+3u)*FMT_BLOCK,block,sizeof(block));
+        if(rc!=IFS_FS_OK)return rc;
+        for(uint32_t i=0u;i<FMT_ITABLE;++i) {
+            memset(block,0,sizeof(block));
+            if(!g && !i) {
+                uint8_t *inode=block+FMT_INODE_BYTES;
+                fmt16(inode,0040755u);
+                fmt32(inode+4,FMT_BLOCK);
+                fmt32(inode+8,now);fmt32(inode+12,now);fmt32(inode+16,now);
+                fmt16(inode+26,2u);fmt32(inode+28,FMT_BLOCK/512u);
+                /* Root directory uses a real one-record extent tree.
+                 * The journal retains valid legacy block pointers, a
+                 * layout explicitly supported on extents-capable EXT4. */
+                fmt32(inode+32,EXTENTS_FLAG);
+                fmt16(inode+40,EXTENT_MAGIC);fmt16(inode+42,1u);
+                fmt16(inode+44,4u);
+                fmt32(inode+52,0u);fmt16(inode+56,1u);
+                fmt32(inode+60,FMT_META);
+                /* Inode eight is the reserved, fully allocated internal
+                 * journal. A single indirect block holds its remaining
+                 * 1012 block addresses. It has no directory entry. */
+                uint8_t *journal=block+7u*FMT_INODE_BYTES;
+                fmt16(journal,0100600u);
+                fmt32(journal+4,FMT_JOURNAL*FMT_BLOCK);
+                fmt32(journal+8,now);fmt32(journal+12,now);
+                fmt32(journal+16,now);fmt16(journal+26,1u);
+                fmt32(journal+28,(FMT_JOURNAL+1u)*(FMT_BLOCK/512u));
+                for(uint32_t j=0u;j<12u;++j)
+                    fmt32(journal+40u+4u*j,FMT_JSTART+j);
+                fmt32(journal+88,FMT_JIND);
+            }
+            rc=fmt_write(h,(uint64_t)(base+4u+i)*FMT_BLOCK,block,sizeof(block));
+            if(rc!=IFS_FS_OK)return rc;
+        }
+    }
+    memset(block,0,sizeof(block));
+    fmt32(block,2u);fmt16(block+4,12u);block[6]=1u;block[7]=2u;block[8]='.';
+    fmt32(block+12,2u);fmt16(block+16,FMT_BLOCK-12u);
+    block[18]=2u;block[19]=2u;block[20]='.';block[21]='.';
+    rc=fmt_write(h,(uint64_t)FMT_META*FMT_BLOCK,block,sizeof(block));
+    if(rc!=IFS_FS_OK)return rc;
+    /* The journal is initially empty: clear every log block, populate its
+     * indirect map, then write a version-two JBD2 superblock in big endian.
+     * A zero start field represents a clean journal, not an unplayed log. */
+    memset(block,0,sizeof(block));
+    for(uint32_t j=0u;j<FMT_JOURNAL-12u;++j)
+        fmt32(block+4u*j,FMT_JSTART+12u+j);
+    rc=fmt_write(h,(uint64_t)FMT_JIND*FMT_BLOCK,block,sizeof(block));
+    if(rc!=IFS_FS_OK)return rc;
+    memset(block,0,sizeof(block));
+    for(uint32_t j=1u;j<FMT_JOURNAL;++j) {
+        rc=fmt_write(h,(uint64_t)(FMT_JSTART+j)*FMT_BLOCK,block,sizeof(block));
+        if(rc!=IFS_FS_OK)return rc;
+    }
+    fmtbe32(block,0xc03b3998u); /* JBD magic */
+    fmtbe32(block+4,4u);       /* V2 journal superblock */
+    fmtbe32(block+12,FMT_BLOCK);fmtbe32(block+16,FMT_JOURNAL);
+    fmtbe32(block+20,1u);fmtbe32(block+24,1u);
+    memcpy(block+48,uuid,sizeof(uuid));fmtbe32(block+64,1u);
+    rc=fmt_write(h,(uint64_t)FMT_JSTART*FMT_BLOCK,block,sizeof(block));
+    if(rc!=IFS_FS_OK)return rc;
+    for(uint32_t g=0u;g<groups;++g) {
+        rc=fmt_write(h,((uint64_t)g*FMT_BPG+1u)*FMT_BLOCK,desc,sizeof(desc));
+        if(rc!=IFS_FS_OK)return rc;
+    }
+    if(h->flush(h->context)!=0)return IFS_FS_IO_ERROR;
+
+    fmt32(sb,groups*FMT_IPG);fmt32(sb+4,blocks);
+    fmt32(sb+12,free_blocks);fmt32(sb+16,groups*FMT_IPG-10u);
+    fmt32(sb+24,2u);fmt32(sb+28,2u);
+    fmt32(sb+32,FMT_BPG);fmt32(sb+36,FMT_BPG);fmt32(sb+40,FMT_IPG);
+    fmt32(sb+48,now);fmt16(sb+54,0xffffu);
+    fmt16(sb+56,0xef53u);fmt16(sb+58,1u);fmt16(sb+60,1u);
+    fmt32(sb+64,now);fmt32(sb+76,1u);
+    fmt32(sb+84,11u);fmt16(sb+88,FMT_INODE_BYTES);
+    fmt32(sb+92,4u); /* HAS_JOURNAL */
+    fmt32(sb+224,8u); /* internal journal inode */
+    sb[253]=1u; /* journal inode block-map backup type */
+    for(uint32_t j=0u;j<12u;++j)fmt32(sb+268u+4u*j,FMT_JSTART+j);
+    fmt32(sb+268u+4u*12u,FMT_JIND);
+    fmt32(sb+268u+4u*16u,FMT_JOURNAL*FMT_BLOCK);
+    fmt32(sb+96,0x42u); /* extents and directory file-type features */
+    fmt32(sb+100,2u); /* large-file read-only compatibility feature */
+    memcpy(sb+104,uuid,sizeof(uuid));
+    if(label_bytes)memcpy(sb+120,label,label_bytes);
+    fmt16(sb+254,32u);
+    for(uint32_t g=1u;g<groups;++g) {
+        fmt16(sb+90,g);
+        rc=fmt_write(h,(uint64_t)g*FMT_BPG*FMT_BLOCK,sb,sizeof(sb));
+        if(rc!=IFS_FS_OK)return rc;
+    }
+    if(h->flush(h->context)!=0)return IFS_FS_IO_ERROR;
+    fmt16(sb+90,0u);
+    rc=fmt_write(h,1024u,sb,sizeof(sb));
+    if(rc!=IFS_FS_OK)return rc;
+    if(h->flush(h->context)!=0) {
+        memset(sb,0,sizeof(sb));
+        (void)ifs_fs_host_write_bytes_v2(h,1024u,sb,sizeof(sb));
+        (void)h->flush(h->context);
+        return IFS_FS_IO_ERROR;
+    }
+    uint32_t observed=0u;
+    rc=probe(h,&observed);
+    return rc!=IFS_FS_OK?rc:observed==4u?IFS_FS_OK:IFS_FS_CORRUPT;
+}
+#endif /* hosted format */
+
 static const IfsFsVolumeOpsV2 ops = {
     .header = {IFS_FS_GROUP_ABI_V2, sizeof(ops), IFS_FS_GROUP_VOLUME, 0,
-               IFS_FS_VOLUME_QUERY | IFS_FS_VOLUME_LABEL_GET},
+               IFS_FS_VOLUME_QUERY | IFS_FS_VOLUME_LABEL_GET
+#if defined(IFS_EXT4_HOSTED_BUILD)
+               | IFS_FS_VOLUME_FORMAT
+#endif
+    },
     .query = query_volume, .label = label
+#if defined(IFS_EXT4_HOSTED_BUILD)
+    , .format = format_ext4
+#endif
 };
 
 static const IfsFsGroupHeaderV2 *query(uint32_t group, uint32_t lo, uint32_t hi)
