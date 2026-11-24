@@ -5,6 +5,23 @@
 #include <string.h>
 #endif
 #include <infiltratr/filesystem_module_v2.h>
+#include <stdatomic.h>
+
+/* Protect shared native session state against concurrent and reentrant
+ * operations. Never wait while a host callback is executing: report BUSY
+ * instead of risking deadlock or teardown of a live volume. This does not
+ * qualify parallel I/O across volumes. */
+static atomic_flag v2_operation_gate=ATOMIC_FLAG_INIT;
+static int v2_enter_operation(void)
+{
+    return !atomic_flag_test_and_set_explicit(&v2_operation_gate,memory_order_acquire);
+}
+static int v2_leave_operation(int rc)
+{
+    atomic_flag_clear_explicit(&v2_operation_gate,memory_order_release);
+    return rc;
+}
+
 #include "../../native/filesystems/ext4/core/ext4_core.h"
 
 enum {
@@ -590,6 +607,13 @@ static int probe(const IfsFsHostRuntimeV2 *host, uint32_t *variant)
     *variant = rc == IFS_FS_OK ? 4u : 0u;
     return rc;
 }
+static int guarded_probe(const IfsFsHostRuntimeV2 *host, uint32_t *variant)
+{
+    if (variant) *variant=0u;
+    if (!v2_enter_operation()) return IFS_FS_BUSY;
+    return v2_leave_operation(probe(host,variant));
+}
+
 
 static int mount(const IfsFsHostRuntimeV2 *host, void **handle,
                  IfsFsVolumeInfoV2 *info)
@@ -645,6 +669,14 @@ static int mount(const IfsFsHostRuntimeV2 *host, void **handle,
     *info = slot->volume.info;
     return IFS_FS_OK;
 }
+static int guarded_mount(const IfsFsHostRuntimeV2 *host, void **handle,
+                 IfsFsVolumeInfoV2 *info)
+{
+    if (handle) *handle=NULL;
+    if (!v2_enter_operation()) return IFS_FS_BUSY;
+    return v2_leave_operation(mount(host,handle,info));
+}
+
 
 static int unmount(void *handle)
 {
@@ -658,6 +690,12 @@ static int unmount(void *handle)
         }
     return IFS_FS_INVALID;
 }
+static int guarded_unmount(void *handle)
+{
+    if (!v2_enter_operation()) return IFS_FS_BUSY;
+    return v2_leave_operation(unmount(handle));
+}
+
 
 static int stat_path(void *handle, const char *path, IfsFsEntryV2 *entry)
 {
@@ -668,6 +706,12 @@ static int stat_path(void *handle, const char *path, IfsFsEntryV2 *entry)
     int rc = resolve(v, path, &inode, &name);
     return rc == IFS_FS_OK ? entry_info(&inode, &name, entry) : rc;
 }
+static int guarded_stat_path(void *handle, const char *path, IfsFsEntryV2 *entry)
+{
+    if (!v2_enter_operation()) return IFS_FS_BUSY;
+    return v2_leave_operation(stat_path(handle,path,entry));
+}
+
 
 static int list(void *handle, const char *path, uint32_t index,
                 IfsFsEntryV2 *entry)
@@ -683,6 +727,13 @@ static int list(void *handle, const char *path, uint32_t index,
     rc = read_inode(v, name.number, &inode);
     return rc == IFS_FS_OK ? entry_info(&inode, &name, entry) : rc;
 }
+static int guarded_list(void *handle, const char *path, uint32_t index,
+                IfsFsEntryV2 *entry)
+{
+    if (!v2_enter_operation()) return IFS_FS_BUSY;
+    return v2_leave_operation(list(handle,path,index,entry));
+}
+
 
 static int read_file(void *handle, const char *path, uint64_t offset,
                      void *data, uint32_t bytes)
@@ -696,6 +747,13 @@ static int read_file(void *handle, const char *path, uint64_t offset,
     if (inode.type != FILE_REGULAR) return IFS_FS_INVALID;
     return read_data(v, &inode, offset, data, bytes);
 }
+static int guarded_read_file(void *handle, const char *path, uint64_t offset,
+                     void *data, uint32_t bytes)
+{
+    if (!v2_enter_operation()) return IFS_FS_BUSY;
+    return v2_leave_operation(read_file(handle,path,offset,data,bytes));
+}
+
 
 static int query_volume(void *handle, IfsFsVolumeInfoV2 *info)
 {
@@ -705,6 +763,12 @@ static int query_volume(void *handle, IfsFsVolumeInfoV2 *info)
     *info = v->info;
     return IFS_FS_OK;
 }
+static int guarded_query_volume(void *handle, IfsFsVolumeInfoV2 *info)
+{
+    if (!v2_enter_operation()) return IFS_FS_BUSY;
+    return v2_leave_operation(query_volume(handle,info));
+}
+
 
 static int label(void *handle, char *out, uint32_t capacity, uint32_t *bytes)
 {
@@ -718,13 +782,20 @@ static int label(void *handle, char *out, uint32_t capacity, uint32_t *bytes)
     *bytes = length;
     return IFS_FS_OK;
 }
+static int guarded_label(void *handle, char *out, uint32_t capacity, uint32_t *bytes)
+{
+    if (bytes) *bytes=0u;
+    if (!v2_enter_operation()) return IFS_FS_BUSY;
+    return v2_leave_operation(label(handle,out,capacity,bytes));
+}
+
 
 static const IfsFsCoreOpsV2 core = {
     .header = {IFS_FS_GROUP_ABI_V2, sizeof(core), IFS_FS_GROUP_CORE, 0,
                IFS_FS_CORE_PROBE | IFS_FS_CORE_MOUNT | IFS_FS_CORE_STAT |
                IFS_FS_CORE_LIST | IFS_FS_CORE_READ},
-    .probe = probe, .mount = mount, .unmount = unmount, .stat = stat_path,
-    .directory_entry = list, .read = read_file
+    .probe = guarded_probe, .mount = guarded_mount, .unmount = guarded_unmount, .stat = guarded_stat_path,
+    .directory_entry = guarded_list, .read = guarded_read_file
 };
 
 static int metadata_get(void *handle, const char *path,
@@ -748,11 +819,18 @@ static int metadata_get(void *handle, const char *path,
     metadata->group = inode.group;
     return IFS_FS_OK;
 }
+static int guarded_metadata_get(void *handle, const char *path,
+                        IfsFsMetadataV2 *metadata)
+{
+    if (!v2_enter_operation()) return IFS_FS_BUSY;
+    return v2_leave_operation(metadata_get(handle,path,metadata));
+}
+
 
 static const IfsFsMetadataOpsV2 metadata_ops = {
     .header = {IFS_FS_GROUP_ABI_V2, sizeof(metadata_ops),
                IFS_FS_GROUP_METADATA, 0, IFS_FS_META_GET_MODE},
-    .get = metadata_get
+    .get = guarded_metadata_get
 };
 
 #if defined(IFS_EXT4_HOSTED_BUILD)
@@ -952,6 +1030,13 @@ static int format_ext4(const IfsFsHostRuntimeV2 *h,uint32_t variant,
     rc=probe(h,&observed);
     return rc!=IFS_FS_OK?rc:observed==4u?IFS_FS_OK:IFS_FS_CORRUPT;
 }
+static int guarded_format_ext4(const IfsFsHostRuntimeV2 *h,uint32_t variant,
+                        const char *label,uint32_t flags)
+{
+    if (!v2_enter_operation()) return IFS_FS_BUSY;
+    return v2_leave_operation(format_ext4(h,variant,label,flags));
+}
+
 #endif /* hosted format */
 
 static const IfsFsVolumeOpsV2 ops = {
@@ -961,9 +1046,9 @@ static const IfsFsVolumeOpsV2 ops = {
                | IFS_FS_VOLUME_FORMAT
 #endif
     },
-    .query = query_volume, .label = label
+    .query = guarded_query_volume, .label = guarded_label
 #if defined(IFS_EXT4_HOSTED_BUILD)
-    , .format = format_ext4
+    , .format = guarded_format_ext4
 #endif
 };
 

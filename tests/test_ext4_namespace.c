@@ -19,8 +19,17 @@ typedef struct {
     uint64_t bytes;
     int fail_reads;
 } Image;
+static const IfsFsCoreOpsV2 *unmount_during_read;
+static void *active_volume;
+static int observed_unmount;
 static int read_at(void *context,uint64_t offset,void *output,uint32_t bytes)
 {
+    if (unmount_during_read) {
+        const IfsFsCoreOpsV2 *ops=unmount_during_read;
+        unmount_during_read=NULL;
+        observed_unmount=ops->unmount(active_volume);
+        if (observed_unmount!=IFS_FS_BUSY) return -1;
+    }
     Image *i=context;
     if (!i || i->fail_reads || (offset%i->sector) ||
         (bytes%i->sector) || bytes>4096 ||
@@ -216,7 +225,11 @@ int main(int argc,char **argv)
     const char expected[]="Common V2 EXT4 shared-object namespace\n";
     CHECK(entry.size_bytes==sizeof(expected)-1);
     char data[sizeof(expected)]={0};
+    active_volume=a;
+    unmount_during_read=core;
+    observed_unmount=IFS_FS_INVALID;
     CHECK(core->read(a,"/hello.txt",0,data,sizeof(expected)-1)==IFS_FS_OK);
+    CHECK(!unmount_during_read && observed_unmount==IFS_FS_BUSY);
     CHECK(memcmp(data,expected,sizeof(expected)-1)==0);
     memset(data,0,sizeof(data));
     CHECK(core->read(b,"/alias.txt",0,data,sizeof(expected)-1)==IFS_FS_OK);
