@@ -1,43 +1,36 @@
 # Filesystem-EXT4
-Independent filesystem implementation for InfiltratorOS, using the shared Common ABI.
 
-## Installer files
+## 1. Purpose and format scope
 
-- `/System/Filesystems/EXT4.so`
-- `/System/Resources/Documentation/Filesystem-EXT4.pdf`
-- `/System/Kernel/Filesystems/ext4.ko` (only when expressly requested for a migration experiment)
+Fourth extended filesystem with extent-backed namespace and metadata integrity. This repository owns the format-specific implementation of `EXT4.so` for InfiltratorOS.
 
-The published Debian package and the ordinary native RUN install only the Common V2 `EXT4.so` and illustrated PDF. The independent Linux-specific `ext4.ko` remains in source for explicitly requested migration experiments (`--kernel-build DIRECTORY` with prepared `Module.symvers`), but is not built or published by the normal release workflow. Direct InfiltratorOS filesystem authority remains the Common V2 SO, not this adapter.
+## 2. On-disk architecture and invariants
 
-InfiltratorOS calls `--system-package-mode` and decides which outputs need updating. Its worker builds a missing or older SO and repairs the PDF independently. The normal release does not carry a separately owned EXT4 kernel module. Use `--build-only --output DIRECTORY` to build a Debian package.
+Block groups, inode and extent trees, feature flags and metadata checksums determine interpretation. The reader validates clean EXT4 media with 1, 2 or 4 KiB blocks; it handles sparse ranges and symbolic links, rejecting layouts requiring replay or unsupported features.
 
-## BOOT qualification
+## 3. Common V2 implementation and capabilities
 
-`EXT4.so` carries a freestanding Common V2 ELF built from `module/firmware`.
-BOOT 0.1.47 or later can read it from the same installed file used by
-desktop applications. Qualification loads a kernel and initramfs through
-that module on a GPT-partitioned NVMe image and checks the EXT4 partition.
-The reader handles extent-backed files, sparse ranges, symbolic links and
-metadata checksums on clean EXT4 volumes with 1, 2 or 4 KiB blocks. It
-rejects volumes that require journal replay and layouts outside its supported
-feature set. Automatic ESP deployment requires a qualified boot entry and
-preservation of the existing recovery entry.
+Hosted and embedded freestanding V2 reader supports stat, list and read, with multiple hosted mount sessions. METADATA.GET_MODE reports mode and UID/GID. The native formatter requires a unique volume identity before writes. The canonical entry point is `infiltrator_filesystem_api_v2`. Consumers must negotiate the actual profile and operation masks and use bounded, partition-relative host I/O. A source-level callback does not by itself establish that every format variant or host profile is qualified.
 
-## Hosted Common V2 namespace (1.0.13)
+## 4. Integrity, mutation, allocation and recovery
 
-The installed `EXT4.so` now implements read-only `CORE.STAT`,
-`CORE.LIST` and `CORE.READ` using the identical format-reader source as the
-firmware ELF. Both profiles use the canonical EXT4 core and bounded Common V2
-host I/O; the hosted module supports multiple independent mount sessions.
-The old Defragmenter CLI and V1 service adapter are absent from the installed
-shared object. Tests use disposable real EXT4 images as well as OVMF kernel
-handoff. This does not yet register a Linux VFS mount or support writable
-root mounting; the generic kernel-side Common V2 loader remains required.
+Writable root mounting, general metadata mutation, timestamp reporting and journal replay are separate qualifications; old V1 regression artifacts are not installed providers. For destructive operations, require the applicable exclusive writable host, durability contract and format-specific validation. Never silently substitute a kernel or FUSE driver or treat a rejected or unavailable operation as success. Preserve original disk-format semantics; relocation and recovery are separate from ordinary file I/O.
 
-## Native file-mode and ownership metadata (Common V2)
+## 5. Build, installation and release
 
-The EXT4.so portable engine exports `METADATA.GET_MODE` using the verified
-inode permission and owner/group fields. InfiltratorOS Kernel can now present
-real executable bits and ownership through the generic V2 metadata group,
-without introducing EXT4-specific code into the Kernel. Timestamp reporting,
-metadata mutation and writable mounting remain separate qualifications.
+The target installation is `/System/Filesystems/EXT4.so` and `/System/Resources/Documentation/Filesystem-EXT4.pdf`. The project release policy is a portable amd64 DEB and a CPU-native source-first RUN, with GitHub's automatic source archive; do not treat this policy statement as verification of the current installer payload. The release workflow is the authoritative executable build and package specification. Historical adapters and test artifacts are not additional production filesystem authorities.
+
+## 6. Qualification and limitations
+
+[Recorded qualification workflow](https://github.com/Infiltrator-Projects/Filesystem-EXT4/actions/runs/45520268651) · [Current workflows](https://github.com/Infiltrator-Projects/Filesystem-EXT4/actions?query=branch%3Amain). A successful workflow establishes the tested scope only, not complete original-format parity, physical-media crash safety, or production BOOT/kernel integration. Use disposable images for destructive qualification.
+
+## 7. Technical references and provenance
+
+- [Provider implementation](module/ext_v2_probe.c)
+- [Native design](native/filesystems/ext4/DESIGN.md)
+- [Migration and source history](MIGRATION_STATUS.md)
+- [Original-format reference source](docs/EXT4.pages) and [PDF](docs/EXT4.pdf)
+- [Project philosophy](docs/PHILOSOPHY.md)
+- [Common ABI](https://github.com/Infiltrator-Projects/Libraries)
+
+The original-format reference and historical migration notes describe different evidence from the current production provider. When descriptions disagree, the current exported descriptor, implementation, executable tests and exact-revision release evidence take precedence.
