@@ -790,6 +790,64 @@ static int guarded_label(void *handle, char *out, uint32_t capacity, uint32_t *b
 }
 
 
+#if defined(IFS_EXT4_HOSTED_BUILD)
+/* Map regular-file data using the same source-owned EXT4 extent and indirect
+ * block decoder as CORE.READ. Coalesce physically adjacent logical blocks.
+ * The V2 ABI has no defined sparse/unwritten extent flag; refuse such maps
+ * rather than inventing a physical address or treating holes as free space. */
+static int map_file(void *handle,const char *path,uint64_t first,
+                    IfsFsExtentV2 *out,uint32_t capacity,uint32_t *written)
+{
+    Volume *v=mounted(handle);
+    if(!v || !out || !capacity)return IFS_FS_INVALID;
+    Inode inode;
+    Dirent name;
+    int rc=resolve(v,path,&inode,&name);
+    if(rc!=IFS_FS_OK)return rc;
+    if(inode.type!=FILE_REGULAR)return IFS_FS_INVALID;
+    const uint32_t unit=v->info.block_bytes;
+    const uint64_t blocks=inode.bytes/unit+(inode.bytes%unit!=0u);
+    if(blocks>(UINT64_C(1)<<32))return IFS_FS_UNSUPPORTED;
+    if(!blocks)return IFS_FS_END;
+    uint64_t index=0u,logical_start=0u,physical_start=0u,previous=0u;
+    uint32_t count=0u;
+    for(uint64_t logical=0u;logical<blocks;++logical) {
+        uint64_t physical=0u;
+        if(v->host->cancelled && v->host->cancelled(v->host->context))
+            return IFS_FS_BUSY;
+        rc=extent(v,&inode,(uint32_t)logical,&physical);
+        if(rc!=IFS_FS_OK)return rc;
+        if(!physical)return IFS_FS_UNSUPPORTED;
+        if(logical && physical!=previous+1u) {
+            if(index>=first && count<capacity)
+                out[count++]=(IfsFsExtentV2){logical_start*unit,
+                    physical_start*unit,(logical-logical_start)*unit,0u,0u};
+            ++index;
+            logical_start=logical;
+            physical_start=physical;
+        } else if(!logical)physical_start=physical;
+        previous=physical;
+    }
+    if(index>=first && count<capacity)
+        out[count++]=(IfsFsExtentV2){logical_start*unit,physical_start*unit,
+            inode.bytes-logical_start*unit,0u,0u};
+    *written=count;
+    return count?IFS_FS_OK:IFS_FS_END;
+}
+static int guarded_map_file(void *handle,const char *path,uint64_t first,
+                            IfsFsExtentV2 *out,uint32_t capacity,uint32_t *written)
+{
+    if(!written)return IFS_FS_INVALID;
+    *written=0u;
+    if(!v2_enter_operation())return IFS_FS_BUSY;
+    return v2_leave_operation(map_file(handle,path,first,out,capacity,written));
+}
+static const IfsFsDefragOpsV2 defrag_ops={
+    .header={IFS_FS_GROUP_ABI_V2,sizeof(defrag_ops),IFS_FS_GROUP_DEFRAG,0u,
+             IFS_FS_DEFRAG_MAP},
+    .map=guarded_map_file
+};
+#endif
 static const IfsFsCoreOpsV2 core = {
     .header = {IFS_FS_GROUP_ABI_V2, sizeof(core), IFS_FS_GROUP_CORE, 0,
                IFS_FS_CORE_PROBE | IFS_FS_CORE_MOUNT | IFS_FS_CORE_STAT |
@@ -1063,6 +1121,9 @@ static const IfsFsGroupHeaderV2 *query(uint32_t group, uint32_t lo, uint32_t hi)
         return &ops.header;
     if (group == IFS_FS_GROUP_METADATA)
         return &metadata_ops.header;
+#if defined(IFS_EXT4_HOSTED_BUILD)
+    if(group==IFS_FS_GROUP_DEFRAG)return &defrag_ops.header;
+#endif
     return NULL;
 }
 
@@ -1080,7 +1141,11 @@ const IfsFsModuleApiV2 *infiltrator_filesystem_api_v2(void)
 #endif
         .group_mask = IFS_FS_GROUP_BIT(IFS_FS_GROUP_CORE) |
                       IFS_FS_GROUP_BIT(IFS_FS_GROUP_VOLUME) |
-                      IFS_FS_GROUP_BIT(IFS_FS_GROUP_METADATA),
+                      IFS_FS_GROUP_BIT(IFS_FS_GROUP_METADATA)
+#if defined(IFS_EXT4_HOSTED_BUILD)
+                      |IFS_FS_GROUP_BIT(IFS_FS_GROUP_DEFRAG)
+#endif
+                      ,
         .query_group = query
     };
     return &api;

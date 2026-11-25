@@ -93,6 +93,9 @@ int main(int argc,char **argv)
     const IfsFsVolumeOpsV2 *volume=(const void *)ifs_fs_group_v2(api,IFS_FS_GROUP_VOLUME);
     const IfsFsMetadataOpsV2 *metadata =
         (const void *)ifs_fs_group_v2(api, IFS_FS_GROUP_METADATA);
+    const IfsFsDefragOpsV2 *defrag=(const void *)ifs_fs_group_v2(api,IFS_FS_GROUP_DEFRAG);
+    CHECK(firmware_library?!defrag:(defrag && defrag->header.capabilities==IFS_FS_DEFRAG_MAP &&
+          defrag->map && !defrag->plan && !defrag->execute));
     CHECK(core && volume && core->stat && core->directory_entry && core->read);
     CHECK(metadata && metadata->get &&
           metadata->header.capabilities == IFS_FS_META_GET_MODE);
@@ -160,6 +163,24 @@ int main(int argc,char **argv)
             CHECK(core->read(b,"/long-alias.bin",offsets[k],actual,
                              sizeof(actual))==IFS_FS_OK);
             CHECK(memcmp(actual,expected,sizeof(actual))==0);
+        }
+        if(defrag) {
+            uint64_t logical=0u;
+            for(uint64_t page=0u;;++page) {
+                IfsFsExtentV2 e={0};
+                uint32_t count=99u;
+                int rc=defrag->map(a,"/payload.bin",page,&e,1u,&count);
+                if(rc==IFS_FS_END) { CHECK(!count); break; }
+                CHECK(rc==IFS_FS_OK && count==1u && e.logical_offset==logical &&
+                      e.length && e.length<=(uint64_t)original.st_size-logical);
+                uint8_t expected[4096],actual[4096];
+                size_t n=e.length<sizeof(expected)?(size_t)e.length:sizeof(expected);
+                CHECK(pread(fd,expected,n,(off_t)logical)==(ssize_t)n);
+                CHECK(pread(images[0].fd,actual,n,(off_t)e.physical_offset)==(ssize_t)n);
+                CHECK(!memcmp(expected,actual,n));
+                logical+=e.length;
+            }
+            CHECK(logical==(uint64_t)original.st_size);
         }
         close(fd);
         CHECK(core->unmount(a)==IFS_FS_OK);
@@ -231,6 +252,17 @@ int main(int argc,char **argv)
     CHECK(core->read(a,"/hello.txt",0,data,sizeof(expected)-1)==IFS_FS_OK);
     CHECK(!unmount_during_read && observed_unmount==IFS_FS_BUSY);
     CHECK(memcmp(data,expected,sizeof(expected)-1)==0);
+    if(defrag) {
+        IfsFsExtentV2 e={0};
+        uint32_t count=99u;
+        CHECK(defrag->map(a,"/hello.txt",0u,&e,1u,&count)==IFS_FS_OK &&
+              count==1u && e.logical_offset==0u && e.length==sizeof(expected)-1);
+        CHECK(pread(images[0].fd,data,sizeof(expected)-1,(off_t)e.physical_offset)==
+              (ssize_t)(sizeof(expected)-1));
+        CHECK(!memcmp(data,expected,sizeof(expected)-1));
+        CHECK(defrag->map(a,"/hello.txt",1u,&e,1u,&count)==IFS_FS_END && !count);
+        CHECK(defrag->map(a,"/",0u,&e,1u,&count)==IFS_FS_INVALID && !count);
+    }
     memset(data,0,sizeof(data));
     CHECK(core->read(b,"/alias.txt",0,data,sizeof(expected)-1)==IFS_FS_OK);
     CHECK(memcmp(data,expected,sizeof(expected)-1)==0);
