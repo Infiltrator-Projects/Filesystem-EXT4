@@ -36,7 +36,7 @@ typedef struct {
     const IfsFsHostRuntimeV2 *host;
     IfsFsVolumeInfoV2 info;
     uint64_t blocks;
-    uint32_t first, inodes, inodes_per_group, seed;
+    uint32_t first, inodes, inodes_per_group, blocks_per_group, seed;
     uint16_t inode_bytes, desc_bytes;
     bool wide, checksum, filetype;
     char label[17];
@@ -153,6 +153,7 @@ static int open_volume(Volume *v, const IfsFsHostRuntimeV2 *host)
     v->first = first;
     v->inodes = inodes;
     v->inodes_per_group = ipg;
+    v->blocks_per_group = bpg;
     v->inode_bytes = inode_bytes;
     v->desc_bytes = desc_bytes;
     v->wide = wide;
@@ -842,6 +843,93 @@ static int guarded_map_file(void *handle,const char *path,uint64_t first,
     if(!v2_enter_operation())return IFS_FS_BUSY;
     return v2_leave_operation(map_file(handle,path,first,out,capacity,written));
 }
+/* Allocation is a separate physical address space from file extent maps.
+ * A page covers at most one native block group. Validate the descriptor,
+ * bitmap checksum where present, and the group's free-block count before
+ * reporting any bitmap-derived classification. Lazy, uninitialised groups
+ * are explicitly UNKNOWN, not guessed free. */
+static int map_allocation(void *handle,uint64_t first,IfsFsAllocationRangeV2 *out,
+                          uint32_t capacity,uint32_t *written)
+{
+    Volume *v=mounted(handle);
+    if(!v || !out || !capacity || first>v->host->volume_bytes)return IFS_FS_INVALID;
+    if(first==v->host->volume_bytes)return IFS_FS_END;
+    if(v->host->cancelled && v->host->cancelled(v->host->context))return IFS_FS_BUSY;
+    const uint32_t unit=v->info.block_bytes, bpg=v->blocks_per_group;
+    const uint64_t begin=(uint64_t)v->first*unit, end=v->blocks*unit;
+    if(first<begin || first>=end){
+        uint64_t limit=first<begin?begin:v->host->volume_bytes;
+        out[0]=(IfsFsAllocationRangeV2){first,limit-first,IFS_FS_SPACE_RESERVED,0u};
+        *written=1u;return IFS_FS_OK;
+    }
+    if(!bpg || bpg>unit*8u || bpg%8u)return IFS_FS_CORRUPT;
+    const uint64_t group64=(first/unit-v->first)/bpg;
+    if(group64>UINT32_MAX)return IFS_FS_UNSUPPORTED;
+    const uint32_t group=(uint32_t)group64;
+    const uint64_t base=(uint64_t)v->first+group64*bpg;
+    const uint32_t span=(uint32_t)(v->blocks-base<bpg?v->blocks-base:bpg);
+    const uint64_t group_end=(base+span)*unit;
+    uint8_t desc[MAX_BLOCK],bitmap[MAX_BLOCK];
+    uint64_t address=((uint64_t)v->first+1u)*unit+group64*v->desc_bytes;
+    int rc=ifs_fs_host_read_bytes_v2(v->host,address,desc,v->desc_bytes);
+    if(rc!=IFS_FS_OK)return rc;
+    if(v->checksum){
+        const uint16_t expected=u16(desc+30);
+        desc[30]=desc[31]=0;
+        if((uint16_t)crc32c(crc_number(v->seed,group),desc,v->desc_bytes)!=expected)
+            return IFS_FS_CORRUPT;
+    }
+    if(u16(desc+18)&2u){
+        out[0]=(IfsFsAllocationRangeV2){first,group_end-first,IFS_FS_SPACE_UNKNOWN,0u};
+        *written=1u;return IFS_FS_OK;
+    }
+    uint64_t block=u32(desc);
+    uint32_t expected_free=u16(desc+12);
+    if(v->wide){
+        block|=(uint64_t)u32(desc+32)<<32;
+        expected_free|=(uint32_t)u16(desc+44)<<16;
+    }
+    if(!block || block>=v->blocks || expected_free>span)return IFS_FS_CORRUPT;
+    rc=ifs_fs_host_read_bytes_v2(v->host,block*unit,bitmap,unit);
+    if(rc!=IFS_FS_OK)return rc;
+    if(v->checksum){
+        uint32_t expected=u16(desc+24);
+        uint32_t actual=crc32c(v->seed,bitmap,bpg/8u);
+        if(v->desc_bytes>=64u)expected|=(uint32_t)u16(desc+56)<<16;
+        else actual&=UINT16_MAX;
+        if(expected!=actual)return IFS_FS_CORRUPT;
+    }
+    uint32_t free_blocks=0;
+    for(uint32_t i=0;i<span;++i)
+        if(!(bitmap[i/8u]&(1u<<(i%8u))))++free_blocks;
+    if(free_blocks!=expected_free)return IFS_FS_CORRUPT;
+    uint32_t count=0;
+    uint64_t cursor=first;
+    while(cursor<group_end && count<capacity){
+        uint32_t bit=(uint32_t)(cursor/unit-base);
+        bool used=(bitmap[bit/8u]&(1u<<(bit%8u)))!=0u;
+        uint32_t next=bit+1u;
+        while(next<span && ((bitmap[next/8u]&(1u<<(next%8u)))!=0u)==used)++next;
+        const uint64_t limit=(base+next)*unit;
+        out[count++]=(IfsFsAllocationRangeV2){cursor,limit-cursor,
+            used?IFS_FS_SPACE_ALLOCATED:IFS_FS_SPACE_FREE,0u};
+        cursor=limit;
+    }
+    *written=count;return IFS_FS_OK;
+}
+static int guarded_map_allocation(void *handle,uint64_t first,IfsFsAllocationRangeV2 *out,
+                                  uint32_t capacity,uint32_t *written)
+{
+    if(!written)return IFS_FS_INVALID;
+    *written=0;
+    if(!v2_enter_operation())return IFS_FS_BUSY;
+    return v2_leave_operation(map_allocation(handle,first,out,capacity,written));
+}
+static const IfsFsAllocationOpsV2 allocation_ops={
+    .header={IFS_FS_GROUP_ABI_V2,sizeof(allocation_ops),IFS_FS_GROUP_ALLOCATION,0u,
+             IFS_FS_ALLOCATION_MAP},
+    .map=guarded_map_allocation
+};
 static const IfsFsDefragOpsV2 defrag_ops={
     .header={IFS_FS_GROUP_ABI_V2,sizeof(defrag_ops),IFS_FS_GROUP_DEFRAG,0u,
              IFS_FS_DEFRAG_MAP},
@@ -1123,6 +1211,7 @@ static const IfsFsGroupHeaderV2 *query(uint32_t group, uint32_t lo, uint32_t hi)
         return &metadata_ops.header;
 #if defined(IFS_EXT4_HOSTED_BUILD)
     if(group==IFS_FS_GROUP_DEFRAG)return &defrag_ops.header;
+    if(group==IFS_FS_GROUP_ALLOCATION)return &allocation_ops.header;
 #endif
     return NULL;
 }
@@ -1144,6 +1233,7 @@ const IfsFsModuleApiV2 *infiltrator_filesystem_api_v2(void)
                       IFS_FS_GROUP_BIT(IFS_FS_GROUP_METADATA)
 #if defined(IFS_EXT4_HOSTED_BUILD)
                       |IFS_FS_GROUP_BIT(IFS_FS_GROUP_DEFRAG)
+                      |IFS_FS_GROUP_BIT(IFS_FS_GROUP_ALLOCATION)
 #endif
                       ,
         .query_group = query
