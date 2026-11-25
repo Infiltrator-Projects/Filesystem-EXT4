@@ -1,4 +1,8 @@
-# EXT4 local source consolidation — 6 November 2026
+# EXT4 migration and qualification history
+
+**Historical record:** the dated entries below describe the corresponding earlier revisions. Current deployment uses only the independent Common V2 provider and its exact-revision release workflow. The native RUN downloads the pinned source; it does not contain a source archive. Earlier packaging and external integration blockers below are historical, not current release requirements. See [README](README.md) and [release workflow](.github/workflows/native-release.yml).
+
+## Local source consolidation — 6 November 2026
 
 Every one of the 40 tracked files in the central Filesystems EXT4 native source tree at `a253fb724ce1fd760a361219281effb6abd71367` is present locally in this independent repository. Its 3 existing canonical core/design files were byte-identical, so preserved; the complete Linux VFS and embedded journal source was imported verbatim with author/license notices unchanged.
 
@@ -66,7 +70,7 @@ not prove that Zabbix's particular live EXT4 layout, firmware bridge, or
 signed direct-boot handoff works; BOOT now retains the UEFI open error for
 diagnosis rather than obscuring it behind a generic missing-file result.
 
-The ordinary portable DEB and source-embedded native RUN now install the V2 SO
+At 1.0.15, the ordinary portable DEB and then-source-embedded native RUN installed the V2 SO
 and its manual only. The ext4.ko source is retained for an explicitly selected
 legacy migration experiment but is neither automatically compiled during
 native installation nor published as a release asset. The CMake product version
@@ -112,7 +116,7 @@ ESP/NVRAM change:
   freestanding reader modifies the deliberately malformed source image.
   Release CI triggers only from main or manual dispatch, not pull requests.
 
-**Current external blocker:** the latest verified BOOT release `v0.1.119`
+**Historical external blocker (21 November 2026):** the latest verified BOOT release `v0.1.119`
 stages a preview EFI binary but does **not** contain the Common V2 production
 `validate-module` executable. EXT4's firmware workflow explicitly failed
 at that gate on 21 November 2026, rather than misclassifying a V2 ELF compile
