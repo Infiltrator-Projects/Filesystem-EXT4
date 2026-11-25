@@ -880,13 +880,14 @@ static int format_ext4(const IfsFsHostRuntimeV2 *h,uint32_t variant,
     const size_t label_bytes=label?strlen(label):0u;
     if(label_bytes>16u)return IFS_FS_INVALID;
 
+    /* A new volume needs an independent identity; a missing entropy
+     * callback must fail before the first destructive write, never
+     * silently create another all-zero UUID. */
     uint8_t uuid[16]={0};
-    if(h->structure_bytes>=sizeof(*h) && h->random_bytes) {
-        if(ifs_fs_host_random_bytes_v2(h,uuid,sizeof(uuid))!=IFS_FS_OK)
-            return IFS_FS_IO_ERROR;
-        uuid[6]=(uint8_t)((uuid[6]&15u)|64u);
-        uuid[8]=(uint8_t)((uuid[8]&63u)|128u);
-    }
+    const int entropy_status=ifs_fs_host_random_bytes_v2(h,uuid,sizeof(uuid));
+    if(entropy_status!=IFS_FS_OK)return entropy_status;
+    uuid[6]=(uint8_t)((uuid[6]&15u)|64u);
+    uuid[8]=(uint8_t)((uuid[8]&63u)|128u);
     uint32_t now=0u;
     if(h->realtime_ns) {
         const uint64_t seconds=h->realtime_ns(h->context)/1000000000ull;

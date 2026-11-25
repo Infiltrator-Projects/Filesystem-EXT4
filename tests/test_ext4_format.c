@@ -34,6 +34,8 @@ static void *allocate(void *ctx,size_t n){(void)ctx;return malloc(n);}
 static void release(void *ctx,void *p){(void)ctx;free(p);}
 static int entropy(void *ctx,void *p,uint32_t n)
 {(void)ctx;return getrandom(p,n,0)==(ssize_t)n?0:-1;}
+static int fail_entropy(void *ctx,void *p,uint32_t n)
+{(void)ctx;(void)p;(void)n;return -1;}
 #define CHECK(x) do {if(!(x)){fprintf(stderr,"EXT4 format line %d: %s\n",__LINE__,#x);goto done;}}while(0)
 int main(int argc,char **argv)
 {
@@ -67,6 +69,13 @@ int main(int argc,char **argv)
     CHECK(vol->format(&h,3u,"EXT4TEST",0u)==IFS_FS_UNSUPPORTED);
     CHECK(vol->format(&h,4u,"01234567890123456",0u)==IFS_FS_INVALID);
     CHECK(!m.writes && !m.flushes);
+    /* Entropy failure is a preflight rejection, not partial format. */
+    h.random_bytes=NULL;
+    CHECK(vol->format(&h,4u,"EXT4TEST",0u)==IFS_FS_UNSUPPORTED);
+    h.random_bytes=fail_entropy;
+    CHECK(vol->format(&h,4u,"EXT4TEST",0u)==IFS_FS_IO_ERROR);
+    CHECK(!m.writes && !m.flushes);
+    h.random_bytes=entropy;
     if(argc==1) {
         m.fail_flush=2u;
         CHECK(vol->format(&h,4u,"EXT4TEST",0u)==IFS_FS_IO_ERROR);
@@ -75,6 +84,16 @@ int main(int argc,char **argv)
         m.fail_flush=0u;
     }
     CHECK(vol->format(&h,4u,"EXT4TEST",0u)==IFS_FS_OK);
+    /* Read the actual superblock UUID and verify its version/variant.
+     * A second explicit format of the disposable image must change it. */
+    uint8_t uuid[16],second_uuid[16];
+    CHECK(pread(m.fd,uuid,sizeof(uuid),1024u+104u)==(ssize_t)sizeof(uuid));
+    CHECK((uuid[6]&0xf0u)==0x40u && (uuid[8]&0xc0u)==0x80u);
+    if(argc==1) {
+        CHECK(vol->format(&h,4u,"EXT4TEST",0u)==IFS_FS_OK);
+        CHECK(pread(m.fd,second_uuid,sizeof(second_uuid),1024u+104u)==(ssize_t)sizeof(second_uuid));
+        CHECK(memcmp(uuid,second_uuid,sizeof(uuid))!=0);
+    }
     uint32_t v=0u;void *session=NULL;
     IfsFsVolumeInfoV2 info={.structure_bytes=sizeof(info)};
     char name[256];
