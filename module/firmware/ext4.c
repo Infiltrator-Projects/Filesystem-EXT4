@@ -35,8 +35,10 @@ enum {
 typedef struct {
     const IfsFsHostRuntimeV2 *host;
     IfsFsVolumeInfoV2 info;
-    uint64_t blocks;
+    uint64_t blocks, groups;
     uint32_t first, inodes, inodes_per_group, blocks_per_group, seed;
+    uint32_t compat, incompat, ro_compat, backup_groups[2];
+    uint16_t reserved_gdt;
     uint16_t inode_bytes, desc_bytes;
     bool wide, checksum, filetype;
     char label[17];
@@ -150,6 +152,13 @@ static int open_volume(Volume *v, const IfsFsHostRuntimeV2 *host)
         return IFS_FS_CORRUPT;
     v->host = host;
     v->blocks = blocks;
+    v->groups = groups;
+    v->compat = u32(sb + 92);
+    v->incompat = flags;
+    v->ro_compat = ro;
+    v->reserved_gdt = u16(sb + 206);
+    v->backup_groups[0] = u32(sb + 0x24c);
+    v->backup_groups[1] = u32(sb + 0x250);
     v->first = first;
     v->inodes = inodes;
     v->inodes_per_group = ipg;
@@ -843,6 +852,79 @@ static int guarded_map_file(void *handle,const char *path,uint64_t first,
     if(!v2_enter_operation())return IFS_FS_BUSY;
     return v2_leave_operation(map_file(handle,path,first,out,capacity,written));
 }
+/* A checksum-valid bitmap and matching descriptor counter can still
+ * advertise live filesystem metadata as free. Verify the intersection of
+ * every fixed metadata range with the current initialized group before
+ * exposing its allocation bits. FLEX_BG can move a group's bitmap or inode
+ * table outside that group's own allocation range. */
+static int allocation_metadata_range(const Volume *v,const uint8_t *bitmap,
+                                     uint64_t base,uint32_t span,
+                                     uint64_t first,uint64_t count)
+{
+    if(!count || first<v->first || first>=v->blocks || count>v->blocks-first)
+        return IFS_FS_CORRUPT;
+    uint64_t at=first>base?first:base;
+    const uint64_t end=first+count<base+span?first+count:base+span;
+    for(;at<end;++at) {
+        const uint32_t bit=(uint32_t)(at-base);
+        if(!(bitmap[bit/8u]&(1u<<(bit%8u))))return IFS_FS_CORRUPT;
+    }
+    return IFS_FS_OK;
+}
+static int allocation_metadata(const Volume *v,uint32_t group,uint64_t base,
+                               uint32_t span,const uint8_t *bitmap)
+{
+    const uint32_t unit=v->info.block_bytes;
+    const uint64_t tables=((uint64_t)v->inodes_per_group*v->inode_bytes+
+                           unit-1u)/unit;
+    const uint64_t descriptors=(v->groups*v->desc_bytes+unit-1u)/unit;
+    int rc;
+    /* META_BG is rejected by open_volume; consequently the primary and
+     * backup descriptor tables are contiguous after each superblock. */
+    if(ifs_ext4_group_has_super_ex(
+            (v->ro_compat&IFS_EXT4_FEATURE_RO_COMPAT_SPARSE_SUPER)!=0u,
+            (v->compat&0x200u)!=0u,v->backup_groups[0],v->backup_groups[1],group)) {
+        rc=allocation_metadata_range(v,bitmap,base,span,base,
+                                     1u+descriptors+v->reserved_gdt);
+        if(rc!=IFS_FS_OK)return rc;
+    }
+    const bool flex=(v->incompat&IFS_EXT4_FEATURE_INCOMPAT_FLEX_BG)!=0u;
+    const uint64_t start=flex?0u:group, end=flex?v->groups:(uint64_t)group+1u;
+    for(uint64_t g=start;g<end;++g) {
+        if(v->host->cancelled && v->host->cancelled(v->host->context))return IFS_FS_BUSY;
+        uint8_t desc[MAX_BLOCK];
+        rc=ifs_fs_host_read_bytes_v2(v->host,((uint64_t)v->first+1u)*unit+
+                                    g*v->desc_bytes,desc,v->desc_bytes);
+        if(rc!=IFS_FS_OK)return rc;
+        if(v->checksum) {
+            const uint16_t expected=u16(desc+30);
+            desc[30]=desc[31]=0;
+            if(g>UINT32_MAX ||
+               (uint16_t)crc32c(crc_number(v->seed,(uint32_t)g),desc,v->desc_bytes)!=expected)
+                return IFS_FS_CORRUPT;
+        }
+        uint64_t bb=u32(desc),ib=u32(desc+4),it=u32(desc+8);
+        if(v->wide) {
+            bb|=(uint64_t)u32(desc+32)<<32;
+            ib|=(uint64_t)u32(desc+36)<<32;
+            it|=(uint64_t)u32(desc+40)<<32;
+        }
+        if(!bb || !ib || !it || bb==ib ||
+           (bb>=it && bb-it<tables) || (ib>=it && ib-it<tables))
+            return IFS_FS_CORRUPT;
+        if(!flex && (bb<base || bb-base>=span || ib<base || ib-base>=span ||
+                     it<base || it-base>=span || tables>span-(it-base)))
+            return IFS_FS_CORRUPT;
+        rc=allocation_metadata_range(v,bitmap,base,span,bb,1u);
+        if(rc!=IFS_FS_OK)return rc;
+        rc=allocation_metadata_range(v,bitmap,base,span,ib,1u);
+        if(rc!=IFS_FS_OK)return rc;
+        rc=allocation_metadata_range(v,bitmap,base,span,it,tables);
+        if(rc!=IFS_FS_OK)return rc;
+    }
+    return IFS_FS_OK;
+}
+
 /* Allocation is a separate physical address space from file extent maps.
  * A page covers at most one native block group. Validate the descriptor,
  * bitmap checksum where present, and the group's free-block count before
@@ -903,6 +985,8 @@ static int map_allocation(void *handle,uint64_t first,IfsFsAllocationRangeV2 *ou
     for(uint32_t i=0;i<span;++i)
         if(!(bitmap[i/8u]&(1u<<(i%8u))))++free_blocks;
     if(free_blocks!=expected_free)return IFS_FS_CORRUPT;
+    rc=allocation_metadata(v,group,base,span,bitmap);
+    if(rc!=IFS_FS_OK)return rc;
     uint32_t count=0;
     uint64_t cursor=first;
     while(cursor<group_end && count<capacity){

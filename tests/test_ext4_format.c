@@ -146,6 +146,25 @@ int main(int argc,char **argv)
     int corruption=allocation->map(session,0,&invalid,1u,&invalid_n);
     CHECK(pwrite(m.fd,&original,1,8192)==1);
     CHECK(corruption==IFS_FS_CORRUPT && !invalid_n);
+    /* Preserve the free count by swapping an occupied inode-table block
+     * with a genuinely free block. The old mapper accepted this corruption
+     * because its scalar count still matched the group descriptor. */
+    uint8_t bitmap[4096],forged[4096];
+    CHECK(pread(m.fd,bitmap,sizeof(bitmap),8192)==(ssize_t)sizeof(bitmap));
+    memcpy(forged,bitmap,sizeof(forged));
+    CHECK(forged[0]&(1u<<4));
+    forged[0]&=(uint8_t)~(1u<<4);
+    uint32_t spare=0u;
+    for(uint32_t bit=5u;bit<32768u && bit<m.bytes/4096u;++bit)
+        if(!(bitmap[bit/8u]&(1u<<(bit%8u)))){spare=bit;break;}
+    CHECK(spare);
+    forged[spare/8u]|=(uint8_t)(1u<<(spare%8u));
+    CHECK(pwrite(m.fd,forged,sizeof(forged),8192)==(ssize_t)sizeof(forged));
+    invalid_n=99u;
+    corruption=allocation->map(session,0u,&invalid,1u,&invalid_n);
+    CHECK(pwrite(m.fd,bitmap,sizeof(bitmap),8192)==(ssize_t)sizeof(bitmap));
+    CHECK(corruption==IFS_FS_CORRUPT && !invalid_n);
+    CHECK(allocation->map(session,0u,&invalid,1u,&invalid_n)==IFS_FS_OK && invalid_n==1u);
     CHECK(core->stat(session,"/",&entry)==IFS_FS_OK && entry.type==IFS_FS_ENTRY_DIRECTORY);
     CHECK(core->directory_entry(session,"/",0u,&entry)==IFS_FS_END);
     char label[32];uint32_t label_bytes=0u;
