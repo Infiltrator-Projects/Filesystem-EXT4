@@ -6,6 +6,8 @@ Ext4 developed from ext2 and ext3; the ext4dev stage became stable in Linux 2.6.
 
 Existing volumes can retain indirect-mapped inodes: a filesystem feature permits extent mapping, while the per-inode flag selects it. Interpret compatible, incompatible and read-only-compatible feature words independently. Unknown incompatible flags forbid mounting; unknown read-only-compatible flags prohibit writes. Distinguish journal mode and physical format from provider capability; recognition alone does not prove implementation or safety.
 
+Compatible feature examples include HAS_JOURNAL, EXT_ATTR, RESIZE_INODE, DIR_INDEX, SPARSE_SUPER2, FAST_COMMIT and ORPHAN_FILE. Incompatible examples include FILETYPE, RECOVER, JOURNAL_DEV, META_BG, EXTENTS, 64BIT, MMP, FLEX_BG, EA_INODE, CSUM_SEED, LARGEDIR, INLINE_DATA, ENCRYPT and CASEFOLD. Read-only-compatible examples include SPARSE_SUPER, LARGE_FILE, BTREE_DIR, HUGE_FILE, GDT_CSUM, DIR_NLINK, EXTRA_ISIZE, QUOTA, BIGALLOC, METADATA_CSUM, PROJECT, VERITY and ORPHAN_PRESENT. These lists describe format features, not a provider admission mask.
+
 ## Superblock and geometry
 
 The primary superblock begins at volume byte 1024 and occupies 1024 bytes. All filesystem integers are little-endian. Relative offsets: inode count 0x00, low block count 0x04, reserved blocks 0x08, free blocks 0x0C, free inodes 0x10, first data block 0x14, log block size 0x18, log cluster size 0x1C, blocks per group 0x20, clusters per group 0x24, inodes per group 0x28. The magic 0xEF53 is at 0x38; revision at 0x4C, first ordinary inode at 0x54, inode size at 0x58, feature words at 0x5C/0x60/0x64, UUID at 0x68. Block bytes equal 1024 times 2 to the power log block size. Check counts and multiply using checked arithmetic.
@@ -18,9 +20,13 @@ The group descriptor size is at superblock offset 0xFE, high total, reserved and
 
 The classic descriptor's low bitmap addresses are at 0, 4 and 8 (block, inode and inode table); free block and inode counts at 12 and 14, used-directory count at 16, flags at 18. Bitmap checksums begin at 24 and 26, unused inode count at 28, descriptor checksum at 30. The 64-byte extension begins with high address words at 32, 36 and 40; count high halves at 44, 46 and 48. A bitmap set bit denotes allocation; BIGALLOC makes the block bitmap represent clusters rather than individual blocks. Lazy-init flags govern whether bitmap content is valid. Reserve metadata explicitly, account for the partial final group and reconcile per-group counters with global totals.
 
+The descriptor may also hold exclude-bitmap references and high halves of counts, addresses and checksums. Block-bitmap-uninitialised, inode-bitmap-uninitialised and inode-table-zeroed flags govern lazy initialisation; never treat uninitialised storage as authoritative allocation data.
+
 ## Inodes and exact location
 
 Inode numbers begin at one. Group equals floor((inode-1)/inodes_per_group), slot equals (inode-1) modulo inodes_per_group. Read the table address from its descriptor, then add slot times inode size. Inode 2 is root. Relative inode offsets: mode 0, UID low 2, size low 4, access/change/modification/deletion times 8/12/16/20, GID low 24, links 26, block count low 28, flags 32, mapping union 40 (60 bytes), generation 100, ACL block low 104, size high 108. Extra fields beyond 128 bytes depend on the declared extra inode size. With 8192 inodes per group, inode 8200 belongs to group 1, slot 7; with 256-byte records its offset is 1792 bytes into that inode table.
+
+Reserved inode roles traditionally include 1 bad blocks, 2 root, 3 user quota, 4 group quota, 5 boot loader, 6 undelete, 7 resize, 8 journal and 11 the first ordinary inode. Modern superblock references may separately identify lost+found, project-quota and orphan-file inodes. Depending on extra inode size, extended fields include the high checksum, nanosecond and epoch extensions, creation time, high version bits and project ID.
 
 ## Extent records and tree traversal
 
@@ -34,21 +40,31 @@ An extent logical 100, physical 50000, length 20 maps logical block 108 to physi
 
 Ordinary directory records contain 32-bit inode, 16-bit record length, 8-bit name length and 8-bit file type, followed by the name, when FILETYPE is enabled. Older directories use a 16-bit name length. A zero inode is unused space. Records must remain in a filesystem block, respect alignment and contain their claimed names. HTree directories use hash-to-logical-directory-block indexes; the root embeds dot and dot-dot entries plus hash/version and level information. Select by hash, then compare actual names in the candidate leaf and handle collisions. Index blocks have distinct checksum tails. Encrypted or casefolded names require the feature-specific comparison and hash semantics.
 
+With metadata checksums, a linear directory leaf ends in a synthetic directory-entry tail. HTree index blocks instead have their own checksum tail. Both bind the checksum to directory identity and generation. Encrypted and casefolded directory entries may include a hash and minor hash; validate the feature-dependent record length before decoding them.
+
 ## Metadata integrity
 
 EXT4 metadata checksums generally use CRC32C, with UUID-derived or explicitly recorded seed where applicable. Superblock checksum covers bytes before its checksum field. Inode, extent-block and directory checksums also bind metadata to inode identity and generation; group descriptor checksums bind group identity and descriptor contents. Bitmap checksums reside in group descriptors and may be truncated. Legacy GDT_CSUM uses CRC16 rather than the modern descriptor checksum scheme. Treat checksum fields and coverage according to the exact structure, including any required zeroing or exclusion. A correct checksum is necessary but not sufficient: validate geometry, ownership and semantic invariants independently.
+
+Metadata checksum coverage includes the superblock, group descriptors, block and inode bitmaps, inodes, extent blocks, directory leaves, HTree nodes, xattr blocks and the multiple-mount-protection record. Each structure has its own checksum inputs; no single whole-block checksum rule applies.
 
 ## JBD2 journal and recovery
 
 JBD2 structures are big-endian, unlike EXT4 metadata. A journal block begins with magic 0xC03B3998, block type and transaction sequence, three 32-bit words. The circular journal contains descriptor blocks naming home-block targets, logged data, revokes and commits. Tags vary with checksum and 64-bit features. Recovery identifies complete committed transactions, builds revoke state and applies eligible images in sequence, then checkpoints durable home blocks before clearing journal state. Reject corrupted tags, invalid target blocks, incompatible journal features and incomplete transactions. An external journal must match its declared identity. Ordered, writeback and full-data journalling differ in when user data becomes durable.
 
+The journal superblock records block size, maximum length, first log block, sequence, log start, error state, feature words, UUID and checksum state. Revoke record block-number width depends on the journal 64BIT feature. Commit records can include checksum type/value and commit time; validate the exact feature-selected format before replay.
+
 ## Mutation, allocation and relocation
 
 Delayed allocation and multiblock allocation select runs when dirty data is written, improving locality. Preserve the distinction between an unwritten preallocated extent and a hole as described in Mapping, holes and file length. Allocation updates bitmap, group counts, extent nodes and inode metadata with required journal ordering. Truncate and unlink may need orphan tracking until cleanup completes. Relocation must reserve a destination, copy and verify bytes, publish replacement mappings transactionally and release old blocks only after publication is durable. Preserve metadata checksums and all applicable allocation-unit restrictions. Extent merging is valid only when logical/physical continuity and written state agree. Atomic I/O guarantees depend on host capabilities, not just extent layout.
 
+Online growth adds groups or extends group geometry and requires addressable descriptor and bitmap reservations before publishing the new size. Hardware-backed untorn direct I/O requires device atomic-write support. Single-block writes require an appropriate filesystem block size; multi-block atomic writes use BIGALLOC cluster alignment. This is not a software copy-on-write transaction.
+
 ## Additional feature families
 
 Extended attributes may occupy inode extra space, external blocks or EA inodes. Inline data can require conversion to extent storage. MMP prevents competing writers when its protocol is supported. Fast commits encode selected metadata changes as TLV records and require idempotent replay; unsupported operations require a full commit. Orphan files provide arrays of pending inode numbers with integrity metadata. Project quotas, fscrypt, verity, casefold and large-directory features each impose additional rules. No feature is safe to ignore for a writable mount merely because basic directory reads succeed. Each requires its own field-level and behavioural verification.
+
+Fast-commit TLV types include HEAD, ADD_RANGE, DEL_RANGE, CREAT, LINK, UNLINK, PAD and TAIL. Replay establishes idempotent resulting state; a normal full JBD2 commit invalidates earlier fast commits. The orphan file has arrays of inode numbers followed by tail magic and checksum; ORPHAN_PRESENT requires recovery to process it. MMP uses periodically updated ownership state; writable access requires a verified absence of competing writers. fs-verity uses a Merkle tree to protect file contents. Inline-to-external allocation conversion must preserve the logical data and transaction boundaries.
 
 ## Implementation and qualification boundary
 

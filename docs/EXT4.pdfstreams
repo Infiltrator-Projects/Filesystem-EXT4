@@ -34,6 +34,14 @@ BT /F2 22 Tf 43 784 Td (EXT4 - technical reference) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 584 Td (Unknown incompatible flags forbid mounting; unknown read-only-compatible flags) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 570 Td (prohibit writes. Distinguish journal mode and physical format from provider) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 556 Td (capability; recognition alone does not prove implementation or safety.) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 532 Td (Compatible feature examples include HAS_JOURNAL, EXT_ATTR, RESIZE_INODE,) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 518 Td (DIR_INDEX, SPARSE_SUPER2, FAST_COMMIT and ORPHAN_FILE. Incompatible examples) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 504 Td (include FILETYPE, RECOVER, JOURNAL_DEV, META_BG, EXTENTS, 64BIT, MMP, FLEX_BG,) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 490 Td (EA_INODE, CSUM_SEED, LARGEDIR, INLINE_DATA, ENCRYPT and CASEFOLD.) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 476 Td (Read-only-compatible examples include SPARSE_SUPER, LARGE_FILE, BTREE_DIR,) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 462 Td (HUGE_FILE, GDT_CSUM, DIR_NLINK, EXTRA_ISIZE, QUOTA, BIGALLOC, METADATA_CSUM,) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 448 Td (PROJECT, VERITY and ORPHAN_PRESENT. These lists describe format features, not a) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 434 Td (provider admission mask.) Tj ET
 0.2 0.3 0.4 rg BT /F1 9 Tf 43 32 Td (Historical development and engineering reference | 2) Tj ET
 
 %%Page
@@ -81,6 +89,11 @@ BT /F2 22 Tf 43 784 Td (EXT4 - technical reference) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 622 Td (individual blocks. Lazy-init flags govern whether bitmap content is valid. Reserve) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 608 Td (metadata explicitly, account for the partial final group and reconcile per-group) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 594 Td (counters with global totals.) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 570 Td (The descriptor may also hold exclude-bitmap references and high halves of) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 556 Td (counts, addresses and checksums. Block-bitmap-uninitialised,) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 542 Td (inode-bitmap-uninitialised and inode-table-zeroed flags govern lazy) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 528 Td (initialisation; never treat uninitialised storage as authoritative allocation) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 514 Td (data.) Tj ET
 0.2 0.3 0.4 rg BT /F1 9 Tf 43 32 Td (Historical development and engineering reference | 5) Tj ET
 
 %%Page
@@ -97,6 +110,12 @@ BT /F2 22 Tf 43 784 Td (EXT4 - technical reference) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 622 Td (128 bytes depend on the declared extra inode size. With 8192 inodes per group,) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 608 Td (inode 8200 belongs to group 1, slot 7; with 256-byte records its offset is 1792) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 594 Td (bytes into that inode table.) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 570 Td (Reserved inode roles traditionally include 1 bad blocks, 2 root, 3 user quota, 4) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 556 Td (group quota, 5 boot loader, 6 undelete, 7 resize, 8 journal and 11 the first) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 542 Td (ordinary inode. Modern superblock references may separately identify lost+found,) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 528 Td (project-quota and orphan-file inodes. Depending on extra inode size, extended) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 514 Td (fields include the high checksum, nanosecond and epoch extensions, creation) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 500 Td (time, high version bits and project ID.) Tj ET
 0.2 0.3 0.4 rg BT /F1 9 Tf 43 32 Td (Historical development and engineering reference | 6) Tj ET
 
 %%Page
@@ -144,6 +163,11 @@ BT /F2 22 Tf 43 784 Td (EXT4 - technical reference) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 622 Td (compare actual names in the candidate leaf and handle collisions. Index blocks have) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 608 Td (distinct checksum tails. Encrypted or casefolded names require the feature-specific) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 594 Td (comparison and hash semantics.) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 570 Td (With metadata checksums, a linear directory leaf ends in a synthetic) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 556 Td (directory-entry tail. HTree index blocks instead have their own checksum tail.) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 542 Td (Both bind the checksum to directory identity and generation. Encrypted and) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 528 Td (casefolded directory entries may include a hash and minor hash; validate the) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 514 Td (feature-dependent record length before decoding them.) Tj ET
 0.2 0.3 0.4 rg BT /F1 9 Tf 43 32 Td (Historical development and engineering reference | 9) Tj ET
 
 %%Page
@@ -160,6 +184,10 @@ BT /F2 22 Tf 43 784 Td (EXT4 - technical reference) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 622 Td (scheme. Treat checksum fields and coverage according to the exact structure,) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 608 Td (including any required zeroing or exclusion. A correct checksum is necessary but) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 594 Td (not sufficient: validate geometry, ownership and semantic invariants independently.) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 570 Td (Metadata checksum coverage includes the superblock, group descriptors, block and) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 556 Td (inode bitmaps, inodes, extent blocks, directory leaves, HTree nodes, xattr) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 542 Td (blocks and the multiple-mount-protection record. Each structure has its own) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 528 Td (checksum inputs; no single whole-block checksum rule applies.) Tj ET
 0.2 0.3 0.4 rg BT /F1 9 Tf 43 32 Td (Historical development and engineering reference | 10) Tj ET
 
 %%Page
@@ -177,6 +205,11 @@ BT /F2 22 Tf 43 784 Td (EXT4 - technical reference) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 608 Td (features and incomplete transactions. An external journal must match its declared) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 594 Td (identity. Ordered, writeback and full-data journalling differ in when user data) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 580 Td (becomes durable.) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 556 Td (The journal superblock records block size, maximum length, first log block,) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 542 Td (sequence, log start, error state, feature words, UUID and checksum state. Revoke) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 528 Td (record block-number width depends on the journal 64BIT feature. Commit records) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 514 Td (can include checksum type/value and commit time; validate the exact) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 500 Td (feature-selected format before replay.) Tj ET
 0.2 0.3 0.4 rg BT /F1 9 Tf 43 32 Td (Historical development and engineering reference | 11) Tj ET
 
 %%Page
@@ -195,6 +228,12 @@ BT /F2 22 Tf 43 784 Td (EXT4 - technical reference) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 594 Td (allocation-unit restrictions. Extent merging is valid only when) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 580 Td (logical/physical continuity and written state agree. Atomic I/O guarantees) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 566 Td (depend on host capabilities, not just extent layout.) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 542 Td (Online growth adds groups or extends group geometry and requires addressable) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 528 Td (descriptor and bitmap reservations before publishing the new size.) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 514 Td (Hardware-backed untorn direct I/O requires device atomic-write support.) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 500 Td (Single-block writes require an appropriate filesystem block size; multi-block) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 486 Td (atomic writes use BIGALLOC cluster alignment. This is not a software) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 472 Td (copy-on-write transaction.) Tj ET
 0.2 0.3 0.4 rg BT /F1 9 Tf 43 32 Td (Historical development and engineering reference | 12) Tj ET
 
 %%Page
@@ -211,6 +250,14 @@ BT /F2 22 Tf 43 784 Td (EXT4 - technical reference) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 622 Td (features each impose additional rules. No feature is safe to ignore for a writable) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 608 Td (mount merely because basic directory reads succeed. Each requires its own) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 594 Td (field-level and behavioural verification.) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 570 Td (Fast-commit TLV types include HEAD, ADD_RANGE, DEL_RANGE, CREAT, LINK, UNLINK,) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 556 Td (PAD and TAIL. Replay establishes idempotent resulting state; a normal full JBD2) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 542 Td (commit invalidates earlier fast commits. The orphan file has arrays of inode) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 528 Td (numbers followed by tail magic and checksum; ORPHAN_PRESENT requires recovery to) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 514 Td (process it. MMP uses periodically updated ownership state; writable access) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 500 Td (requires a verified absence of competing writers. fs-verity uses a Merkle tree) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 486 Td (to protect file contents. Inline-to-external allocation conversion must preserve) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 472 Td (the logical data and transaction boundaries.) Tj ET
 0.2 0.3 0.4 rg BT /F1 9 Tf 43 32 Td (Historical development and engineering reference | 13) Tj ET
 
 %%Page
