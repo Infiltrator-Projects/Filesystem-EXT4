@@ -2,9 +2,9 @@
 
 ## Evolution and format negotiation
 
-EXT4 developed from EXT2 and EXT3, replacing indirect mapping for newly created extent-enabled files, introducing delayed allocation, larger address spaces, flexible groups and stronger integrity checks. An EXT4 volume can contain older indirect-mapped inodes: the filesystem feature allows extent mapping, while the per-inode flag selects it. Interpret the compatible, incompatible and read-only-compatible feature words independently. Unknown incompatible flags forbid mounting; unknown read-only-compatible flags prohibit writes. A format feature being recognised does not establish provider implementation or safety. Distinguish journal mode and feature flags from the physical format.
+Ext4 developed from ext2 and ext3; the ext4dev stage became stable in Linux 2.6.28 (2008). Extents, delayed allocation, larger address spaces, flexible groups and stronger integrity checks improve scalability and sequential placement but introduce unwritten-extent and feature-admission complexity. Ext4 is not a pooled or general copy-on-write snapshot filesystem.
 
-The ext4dev stage became stable in Linux 2.6.28 (2008). Extents and delayed allocation improve sequential placement but introduce unwritten extent and feature-admission complexity. Ext4 is not a pooled or general copy-on-write snapshot filesystem.
+Existing volumes can retain indirect-mapped inodes: a filesystem feature permits extent mapping, while the per-inode flag selects it. Interpret compatible, incompatible and read-only-compatible feature words independently. Unknown incompatible flags forbid mounting; unknown read-only-compatible flags prohibit writes. Distinguish journal mode and physical format from provider capability; recognition alone does not prove implementation or safety.
 
 ## Superblock and geometry
 
@@ -44,7 +44,7 @@ JBD2 structures are big-endian, unlike EXT4 metadata. A journal block begins wit
 
 ## Mutation, allocation and relocation
 
-Delayed allocation and multiblock allocation select runs when dirty data is written, improving locality. An unwritten preallocated extent is distinct from a hole and must not expose prior bytes. Allocation updates bitmap, group counts, extent nodes and inode metadata with required journal ordering. Truncate and unlink may need orphan tracking until cleanup completes. Relocation must reserve a destination, copy and verify bytes, publish replacement mappings transactionally and release old blocks only after publication is durable. Preserve metadata checksums and all applicable allocation-unit restrictions. Extent merging is valid only when logical/physical continuity and written state agree. Atomic I/O guarantees depend on host capabilities, not just extent layout.
+Delayed allocation and multiblock allocation select runs when dirty data is written, improving locality. Preserve the distinction between an unwritten preallocated extent and a hole as described in Mapping, holes and file length. Allocation updates bitmap, group counts, extent nodes and inode metadata with required journal ordering. Truncate and unlink may need orphan tracking until cleanup completes. Relocation must reserve a destination, copy and verify bytes, publish replacement mappings transactionally and release old blocks only after publication is durable. Preserve metadata checksums and all applicable allocation-unit restrictions. Extent merging is valid only when logical/physical continuity and written state agree. Atomic I/O guarantees depend on host capabilities, not just extent layout.
 
 ## Additional feature families
 

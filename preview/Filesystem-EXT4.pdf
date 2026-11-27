@@ -45,25 +45,23 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 9 0 R >>
 endobj
 9 0 obj
-<< /Length 1930 >>
+<< /Length 1709 >>
 stream
 0.06 0.15 0.23 rg 0 768 595 74 re f
 1 1 1 rg BT /F2 10 Tf 43 811 Td (INFILTRATOR / FILESYSTEM ENGINEERING) Tj ET
 BT /F2 22 Tf 43 784 Td (EXT4 - technical reference) Tj ET
 0.08 0.14 0.20 rg BT /F2 15 Tf 43 736 Td (1. Evolution and format negotiation) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 706 Td (EXT4 developed from EXT2 and EXT3, replacing indirect mapping for newly created) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 692 Td (extent-enabled files, introducing delayed allocation, larger address spaces,) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 678 Td (flexible groups and stronger integrity checks. An EXT4 volume can contain older) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 664 Td (indirect-mapped inodes: the filesystem feature allows extent mapping, while the) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 650 Td (per-inode flag selects it. Interpret the compatible, incompatible and) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 636 Td (read-only-compatible feature words independently. Unknown incompatible flags forbid) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 622 Td (mounting; unknown read-only-compatible flags prohibit writes. A format feature) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 608 Td (being recognised does not establish provider implementation or safety. Distinguish) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 594 Td (journal mode and feature flags from the physical format.) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 570 Td (The ext4dev stage became stable in Linux 2.6.28 \(2008\). Extents and delayed) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 556 Td (allocation improve sequential placement but introduce unwritten extent and) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 542 Td (feature-admission complexity. Ext4 is not a pooled or general copy-on-write) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 528 Td (snapshot filesystem.) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 706 Td (Ext4 developed from ext2 and ext3; the ext4dev stage became stable in Linux) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 692 Td (2.6.28 \(2008\). Extents, delayed allocation, larger address spaces, flexible) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 678 Td (groups and stronger integrity checks improve scalability and sequential) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 664 Td (placement but introduce unwritten-extent and feature-admission complexity. Ext4) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 650 Td (is not a pooled or general copy-on-write snapshot filesystem.) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 626 Td (Existing volumes can retain indirect-mapped inodes: a filesystem feature) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 612 Td (permits extent mapping, while the per-inode flag selects it. Interpret) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 598 Td (compatible, incompatible and read-only-compatible feature words independently.) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 584 Td (Unknown incompatible flags forbid mounting; unknown read-only-compatible flags) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 570 Td (prohibit writes. Distinguish journal mode and physical format from provider) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 556 Td (capability; recognition alone does not prove implementation or safety.) Tj ET
 0.2 0.3 0.4 rg BT /F1 9 Tf 43 32 Td (Historical development and engineering reference | 2) Tj ET
 endstream
 endobj
@@ -268,22 +266,23 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 29 0 R >>
 endobj
 29 0 obj
-<< /Length 1622 >>
+<< /Length 1706 >>
 stream
 0.06 0.15 0.23 rg 0 768 595 74 re f
 1 1 1 rg BT /F2 10 Tf 43 811 Td (INFILTRATOR / FILESYSTEM ENGINEERING) Tj ET
 BT /F2 22 Tf 43 784 Td (EXT4 - technical reference) Tj ET
 0.08 0.14 0.20 rg BT /F2 15 Tf 43 736 Td (11. Mutation, allocation and relocation) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 706 Td (Delayed allocation and multiblock allocation select runs when dirty data is) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 692 Td (written, improving locality. An unwritten preallocated extent is distinct from a) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 678 Td (hole and must not expose prior bytes. Allocation updates bitmap, group counts,) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 664 Td (extent nodes and inode metadata with required journal ordering. Truncate and unlink) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 650 Td (may need orphan tracking until cleanup completes. Relocation must reserve a) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 636 Td (destination, copy and verify bytes, publish replacement mappings transactionally) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 622 Td (and release old blocks only after publication is durable. Preserve metadata) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 608 Td (checksums and all applicable allocation-unit restrictions. Extent merging is valid) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 594 Td (only when logical/physical continuity and written state agree. Atomic I/O) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 580 Td (guarantees depend on host capabilities, not just extent layout.) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 692 Td (written, improving locality. Preserve the distinction between an unwritten) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 678 Td (preallocated extent and a hole as described in Mapping, holes and file length.) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 664 Td (Allocation updates bitmap, group counts, extent nodes and inode metadata with) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 650 Td (required journal ordering. Truncate and unlink may need orphan tracking until) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 636 Td (cleanup completes. Relocation must reserve a destination, copy and verify) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 622 Td (bytes, publish replacement mappings transactionally and release old blocks only) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 608 Td (after publication is durable. Preserve metadata checksums and all applicable) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 594 Td (allocation-unit restrictions. Extent merging is valid only when) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 580 Td (logical/physical continuity and written state agree. Atomic I/O guarantees) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 566 Td (depend on host capabilities, not just extent layout.) Tj ET
 0.2 0.3 0.4 rg BT /F1 9 Tf 43 32 Td (Historical development and engineering reference | 12) Tj ET
 endstream
 endobj
@@ -375,34 +374,34 @@ xref
 0000000572 00000 n 
 0000002128 00000 n 
 0000002274 00000 n 
-0000004255 00000 n 
-0000004403 00000 n 
-0000005819 00000 n 
-0000005967 00000 n 
-0000007546 00000 n 
-0000007694 00000 n 
-0000009211 00000 n 
-0000009359 00000 n 
-0000010870 00000 n 
-0000011018 00000 n 
-0000012571 00000 n 
-0000012719 00000 n 
-0000014139 00000 n 
-0000014287 00000 n 
-0000015827 00000 n 
-0000015975 00000 n 
-0000017526 00000 n 
-0000017674 00000 n 
-0000019303 00000 n 
-0000019451 00000 n 
-0000021125 00000 n 
-0000021273 00000 n 
-0000022790 00000 n 
-0000022938 00000 n 
-0000025239 00000 n 
-0000025387 00000 n 
+0000004034 00000 n 
+0000004182 00000 n 
+0000005598 00000 n 
+0000005746 00000 n 
+0000007325 00000 n 
+0000007473 00000 n 
+0000008990 00000 n 
+0000009138 00000 n 
+0000010649 00000 n 
+0000010797 00000 n 
+0000012350 00000 n 
+0000012498 00000 n 
+0000013918 00000 n 
+0000014066 00000 n 
+0000015606 00000 n 
+0000015754 00000 n 
+0000017305 00000 n 
+0000017453 00000 n 
+0000019082 00000 n 
+0000019230 00000 n 
+0000020988 00000 n 
+0000021136 00000 n 
+0000022653 00000 n 
+0000022801 00000 n 
+0000025102 00000 n 
+0000025250 00000 n 
 trailer
 << /Size 36 /Root 1 0 R >>
 startxref
-27239
+27102
 %%EOF
