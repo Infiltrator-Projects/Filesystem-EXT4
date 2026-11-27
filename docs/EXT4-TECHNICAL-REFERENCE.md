@@ -4,6 +4,8 @@
 
 EXT4 developed from EXT2 and EXT3, replacing indirect mapping for newly created extent-enabled files, introducing delayed allocation, larger address spaces, flexible groups and stronger integrity checks. An EXT4 volume can contain older indirect-mapped inodes: the filesystem feature allows extent mapping, while the per-inode flag selects it. Interpret the compatible, incompatible and read-only-compatible feature words independently. Unknown incompatible flags forbid mounting; unknown read-only-compatible flags prohibit writes. A format feature being recognised does not establish provider implementation or safety. Distinguish journal mode and feature flags from the physical format.
 
+The ext4dev stage became stable in Linux 2.6.28 (2008). Extents and delayed allocation improve sequential placement but introduce unwritten extent and feature-admission complexity. Ext4 is not a pooled or general copy-on-write snapshot filesystem.
+
 ## Superblock and geometry
 
 The primary superblock begins at volume byte 1024 and occupies 1024 bytes. All filesystem integers are little-endian. Relative offsets: inode count 0x00, low block count 0x04, reserved blocks 0x08, free blocks 0x0C, free inodes 0x10, first data block 0x14, log block size 0x18, log cluster size 0x1C, blocks per group 0x20, clusters per group 0x24, inodes per group 0x28. The magic 0xEF53 is at 0x38; revision at 0x4C, first ordinary inode at 0x54, inode size at 0x58, feature words at 0x5C/0x60/0x64, UUID at 0x68. Block bytes equal 1024 times 2 to the power log block size. Check counts and multiply using checked arithmetic.
@@ -47,6 +49,14 @@ Delayed allocation and multiblock allocation select runs when dirty data is writ
 ## Additional feature families
 
 Extended attributes may occupy inode extra space, external blocks or EA inodes. Inline data can require conversion to extent storage. MMP prevents competing writers when its protocol is supported. Fast commits encode selected metadata changes as TLV records and require idempotent replay; unsupported operations require a full commit. Orphan files provide arrays of pending inode numbers with integrity metadata. Project quotas, fscrypt, verity, casefold and large-directory features each impose additional rules. No feature is safe to ignore for a writable mount merely because basic directory reads succeed. Each requires its own field-level and behavioural verification.
+
+## Implementation and qualification boundary
+
+At historical revision dad78c3dd93a the hosted and embedded reader admitted clean 1, 2 and 4 KiB block media, sparse ranges and symbolic links; hosted multiple mounts and GET_MODE reported UID/GID/mode. Formatter identity was obtained before mutation. Journal replay, timestamp reporting and writable root support were separate questions.
+
+Common V2 is the independent provider interface: https://github.com/Infiltrator-Projects/Libraries/blob/main/docs/FILESYSTEM_COMMON_ABI_V2.md . Negotiate real operation masks and media profiles. Use bounded host I/O, exclusive unmounted ownership and durable flush for mutation; distinguish unsupported, corrupt, I/O and stale-handle results. Test Media and Defragmenter use the same engine. Hosted, freestanding, BOOT, kernel, recovery and package qualification are independent. Current capability and release status belongs to the repository README and exact-source qualification records; historical evidence is not a current status claim.
+
+Historical source or test reference: https://github.com/Infiltrator-Projects/Filesystem-EXT4/actions/runs/4552028651 .
 
 ## Independent qualification and sources
 
