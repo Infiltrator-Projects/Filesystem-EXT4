@@ -12,9 +12,12 @@ add_library(ext4-boot MODULE ext4.c ../../native/filesystems/ext4/core/ext4_core
 set_target_properties(ext4-boot PROPERTIES PREFIX "" OUTPUT_NAME EXT4 C_VISIBILITY_PRESET hidden)
 target_compile_features(ext4-boot PRIVATE c_std_11)
 target_include_directories(ext4-boot PRIVATE "${COMMON_INCLUDE_DIR}")
+# Firmware uses AMD64 SysV without CET, SIMD state assumptions,
+# packed relative relocations or non-4-KiB load alignment. Hosted builds
+# retain their separate native optimization profile.
 target_compile_options(ext4-boot PRIVATE
     -Wall -Wextra -Wpedantic -Werror -ffreestanding -fno-builtin
-    -fno-tree-loop-distribute-patterns -fno-stack-protector -mno-red-zone
+    -fno-tree-loop-distribute-patterns -fno-stack-protector -mno-red-zone -fcf-protection=none -mgeneral-regs-only
     -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0)
 target_link_options(ext4-boot PRIVATE
-    -nostdlib -Wl,-Bsymbolic,-z,defs,-z,noexecstack,-z,relro,-z,now)
+    -nostdlib -Wl,-z,nopack-relative-relocs,-z,max-page-size=4096,-Bsymbolic,-z,defs,-z,noexecstack,-z,relro,-z,now)
